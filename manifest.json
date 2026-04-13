@@ -1,0 +1,36 @@
+{
+    "Author": "T.J. Lauerman aka ThatSportsGamer",
+    "CodePath": "plugin.js",
+    "Description": "Shows live MiLB scores on your Stream Deck. Each button tracks one team — see the current score, inning, and game status at a glance.",
+    "Name": "Live MiLB Scores",
+    "Icon": "imgs/plugin-icon",
+    "Version": "1.0.0",
+    "SDKVersion": 2,
+    "Software": {
+        "MinimumVersion": "6.0"
+    },
+    "OS": [
+        { "Platform": "mac", "MinimumVersion": "10.15" },
+        { "Platform": "windows", "MinimumVersion": "10" }
+    ],
+    "Nodejs": {
+        "Version": "20",
+        "Debug": "enabled"
+    },
+    "Actions": [
+        {
+            "Name": "Live MiLB Scores",
+            "UUID": "com.tj.livemilbscores.score",
+            "Icon": "imgs/action-icon",
+            "Tooltip": "Shows live score for your chosen MiLB team. Updates every 30 seconds.",
+            "PropertyInspectorPath": "property-inspector.html",
+            "States": [
+                {
+                    "Image": "imgs/action-icon",
+                    "Title": ""
+                }
+            ],
+            "SupportedInMultiActions": false
+        }
+    ]
+}

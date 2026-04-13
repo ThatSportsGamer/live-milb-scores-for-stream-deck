@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <title>MiLB Score Settings</title>
+    <style>
+        :root {
+            --bg:        #1e1e1e;
+            --surface:   #2c2c2c;
+            --border:    #444;
+            --text:      #d4d4d4;
+            --accent:    #003831;
+            --accent-hi: #C0392B;
+            --radius:    6px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: system-ui, -apple-system, sans-serif;
+            font-size: 13px;
+            padding: 12px;
+        }
+
+        h2 {
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: #fff;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 6px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 4px;
+            color: #aaa;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+
+        select {
+            width: 100%;
+            padding: 7px 10px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-size: 13px;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23aaa' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: var(--accent-hi);
+        }
+
+        select:disabled {
+            opacity: 0.45;
+            cursor: default;
+        }
+
+        .field-group {
+            margin-bottom: 12px;
+        }
+
+        /* Browse By toggle */
+        .toggle-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 0;
+        }
+
+        .toggle-group label {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 7px 8px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text);
+            text-transform: none;
+            letter-spacing: normal;
+            margin-bottom: 0;
+            transition: border-color .15s, background .15s;
+            user-select: none;
+        }
+
+        .toggle-group input[type="radio"] { display: none; }
+
+        .toggle-group label.active {
+            border-color: var(--accent-hi);
+            background: #3a1a1a;
+            color: #fff;
+        }
+
+        .status-msg {
+            font-size: 11px;
+            color: #888;
+            min-height: 18px;
+            margin-bottom: 4px;
+        }
+        .status-msg.error { color: #e07070; }
+
+        .info-box {
+            margin-top: 14px;
+            padding: 9px 11px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent-hi);
+            border-radius: var(--radius);
+            font-size: 11px;
+            color: #999;
+            line-height: 1.5;
+        }
+        .info-box strong { color: var(--text); }
+    </style>
+</head>
+<body>
+
+<h2>⚾ Live MiLB Scores</h2>
+
+<!-- Browse By toggle -->
+<div class="field-group">
+    <label>Browse By</label>
+    <div class="toggle-group">
+        <label id="btnLevel" class="active">
+            <input type="radio" name="browseBy" value="level" checked>
+            <span>League</span>
+        </label>
+        <label id="btnOrg">
+            <input type="radio" name="browseBy" value="org">
+            <span>MLB Organization</span>
+        </label>
+    </div>
+</div>
+
+<!-- Step 1: Level OR Organization -->
+<div class="field-group">
+    <label for="filterSelect" id="filterLabel">Level</label>
+    <select id="filterSelect" disabled>
+        <option value="">— Loading… —</option>
+    </select>
+</div>
+
+<!-- Step 2 (League mode only): League within the chosen level -->
+<div class="field-group" id="leagueRow">
+    <label for="leagueSelect">League</label>
+    <select id="leagueSelect" disabled>
+        <option value="">— Select a level first —</option>
+    </select>
+</div>
+
+<!-- Step 3: Team -->
+<div class="field-group">
+    <label for="teamSelect">Team</label>
+    <select id="teamSelect" disabled>
+        <option value="">— Select a league first —</option>
+    </select>
+</div>
+
+<div class="status-msg" id="statusMsg"></div>
+
+<!-- Button link preference -->
+<div class="field-group">
+    <label for="linkType">Button Press Opens</label>
+    <select id="linkType">
+        <option value="gameday">MiLB Gameday (free)</option>
+        <option value="tv">MiLB Live Stream (subscription)</option>
+    </select>
+</div>
+
+<div class="info-box">
+    <strong>How it works:</strong><br>
+    • Scores refresh automatically every <strong>30 seconds</strong><br>
+    • Press the button anytime to refresh immediately<br>
+    • Shows score + inning (▲/▼) during live games<br>
+    • Shows start time when a game is scheduled<br>
+    • Shows Final score when the game is over
+</div>
+
+<script>
+    // ─── Stream Deck plumbing ─────────────────────────────────────────────────
+    var websocket       = null;
+    var piUUID          = null;
+    var actionUUID      = null;
+    var pendingSettings = null;
+
+    // ─── Team data ────────────────────────────────────────────────────────────
+    // [{id, abbr, name, teamName, slug, sportId, leagueId, leagueName, parentOrgId}]
+    var allTeams   = [];
+    var teamsReady = false;
+
+    var LEVEL_LABELS = { 11: 'Triple-A', 12: 'Double-A', 13: 'High-A', 14: 'Single-A' };
+
+    // 30 MLB parent orgs (sorted alphabetically, IDs are stable year-to-year)
+    var MLB_ORGS = [
+        { id: 109, name: 'Arizona Diamondbacks'  },
+        { id: 144, name: 'Atlanta Braves'         },
+        { id: 110, name: 'Baltimore Orioles'      },
+        { id: 111, name: 'Boston Red Sox'         },
+        { id: 112, name: 'Chicago Cubs'           },
+        { id: 145, name: 'Chicago White Sox'      },
+        { id: 113, name: 'Cincinnati Reds'        },
+        { id: 114, name: 'Cleveland Guardians'    },
+        { id: 115, name: 'Colorado Rockies'       },
+        { id: 116, name: 'Detroit Tigers'         },
+        { id: 117, name: 'Houston Astros'         },
+        { id: 118, name: 'Kansas City Royals'     },
+        { id: 108, name: 'Los Angeles Angels'     },
+        { id: 119, name: 'Los Angeles Dodgers'    },
+        { id: 146, name: 'Miami Marlins'          },
+        { id: 158, name: 'Milwaukee Brewers'      },
+        { id: 142, name: 'Minnesota Twins'        },
+        { id: 121, name: 'New York Mets'          },
+        { id: 147, name: 'New York Yankees'       },
+        { id: 133, name: 'Oakland Athletics'      },
+        { id: 143, name: 'Philadelphia Phillies'  },
+        { id: 134, name: 'Pittsburgh Pirates'     },
+        { id: 135, name: 'San Diego Padres'       },
+        { id: 137, name: 'San Francisco Giants'   },
+        { id: 136, name: 'Seattle Mariners'       },
+        { id: 138, name: 'St. Louis Cardinals'    },
+        { id: 139, name: 'Tampa Bay Rays'         },
+        { id: 140, name: 'Texas Rangers'          },
+        { id: 141, name: 'Toronto Blue Jays'      },
+        { id: 120, name: 'Washington Nationals'   }
+    ];
+
+    // ─── Slug helper (must match plugin.js exactly) ───────────────────────────
+    function toSlug(name) {
+        return (name || '').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    }
+
+    // ─── Fetch teams from API ─────────────────────────────────────────────────
+    function fetchTeams() {
+        var year = new Date().getFullYear();
+        var url  = 'https://statsapi.mlb.com/api/v1/teams?sportIds=11,12,13,14&season=' + year;
+
+        fetch(url)
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function(data) {
+                allTeams = (data.teams || []).map(function(t) {
+                    return {
+                        id:           t.id,
+                        abbr:         t.abbreviation   || '',
+                        name:         t.name           || '',
+                        teamName:     t.teamName       || '',
+                        slug:         toSlug(t.teamName || t.name),
+                        sportId:      (t.sport  && t.sport.id)   || 0,
+                        leagueId:     (t.league && t.league.id)  || 0,
+                        leagueName:   (t.league && t.league.name) || '',
+                        parentOrgId:  t.parentOrgId  || 0,
+                        parentOrgName: t.parentOrgName || ''
+                    };
+                }).sort(function(a, b) { return a.name.localeCompare(b.name); });
+
+                teamsReady = true;
+                setStatus('');
+                initFilterDropdown();
+
+                if (pendingSettings) {
+                    applySettings(pendingSettings);
+                    pendingSettings = null;
+                }
+            })
+            .catch(function(err) {
+                setStatus('Could not load teams — check your connection.', true);
+                console.error('MiLB fetch error:', err);
+            });
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+    function setStatus(msg, isError) {
+        var el = document.getElementById('statusMsg');
+        el.textContent = msg;
+        el.className = 'status-msg' + (isError ? ' error' : '');
+    }
+
+    function getBrowseBy() {
+        return document.querySelector('input[name="browseBy"]:checked').value;
+    }
+
+    // Show or hide the league row (only visible in 'level' mode)
+    function setLeagueRowVisible(visible) {
+        document.getElementById('leagueRow').style.display = visible ? '' : 'none';
+    }
+
+    // ─── Step 1: populate the Level or Org dropdown ───────────────────────────
+    function initFilterDropdown() {
+        var mode = getBrowseBy();
+        var sel  = document.getElementById('filterSelect');
+        var lbl  = document.getElementById('filterLabel');
+        sel.innerHTML = '';
+
+        if (mode === 'level') {
+            lbl.textContent = 'Level';
+            setLeagueRowVisible(true);
+            addBlank(sel, '— Select a level —');
+            [11, 12, 13, 14].forEach(function(id) {
+                addOpt(sel, id, LEVEL_LABELS[id]);
+            });
+        } else {
+            lbl.textContent = 'Organization';
+            setLeagueRowVisible(false);
+            addBlank(sel, '— Select an organization —');
+            MLB_ORGS.forEach(function(org) {
+                var has = allTeams.some(function(t) { return t.parentOrgId === org.id; });
+                if (has) addOpt(sel, org.id, org.name);
+            });
+        }
+
+        sel.disabled = false;
+        resetLeague();
+        resetTeam(mode === 'level' ? 'league' : 'org');
+    }
+
+    // ─── Step 2 (level mode): populate the League dropdown ───────────────────
+    function populateLeagues(levelId) {
+        var sel = document.getElementById('leagueSelect');
+        var fv  = parseInt(levelId, 10);
+        sel.innerHTML = '';
+
+        if (!levelId || isNaN(fv)) {
+            addBlank(sel, '— Select a level first —');
+            sel.disabled = true;
+            resetTeam('league');
+            return;
+        }
+
+        // Collect distinct leagues for this level, sorted by name
+        var seen    = {};
+        var leagues = [];
+        allTeams.forEach(function(t) {
+            if (t.sportId === fv && t.leagueId && !seen[t.leagueId]) {
+                seen[t.leagueId] = true;
+                leagues.push({ id: t.leagueId, name: t.leagueName });
+            }
+        });
+        leagues.sort(function(a, b) { return a.name.localeCompare(b.name); });
+
+        addBlank(sel, '— Select a league —');
+        leagues.forEach(function(lg) { addOpt(sel, lg.id, lg.name); });
+
+        sel.disabled = false;
+        resetTeam('league');
+    }
+
+    // ─── Step 3: populate Team dropdown ──────────────────────────────────────
+    function populateTeams(filterValue, mode) {
+        var teamSel = document.getElementById('teamSelect');
+        var fv      = parseInt(filterValue, 10);
+        teamSel.innerHTML = '';
+
+        var placeholder = !filterValue
+            ? (mode === 'league' ? '— Select a league first —' : '— Select an organization first —')
+            : '— Select a team —';
+        addBlank(teamSel, placeholder);
+
+        if (!filterValue || isNaN(fv)) {
+            teamSel.disabled = true;
+            return;
+        }
+
+        var filtered;
+        if (mode === 'league') {
+            filtered = allTeams.filter(function(t) { return t.leagueId === fv; });
+        } else {
+            // org mode — filter by parentOrgId, group by level
+            filtered = allTeams.filter(function(t) { return t.parentOrgId === fv; });
+        }
+
+        if (!filtered.length) {
+            teamSel.disabled = true;
+            return;
+        }
+
+        if (mode === 'org') {
+            // Group by level for org mode
+            [11, 12, 13, 14].forEach(function(lid) {
+                var group = filtered.filter(function(t) { return t.sportId === lid; });
+                if (!group.length) return;
+                var og = document.createElement('optgroup');
+                og.label = LEVEL_LABELS[lid] || ('Sport ' + lid);
+                group.forEach(function(t) { og.appendChild(makeTeamOption(t)); });
+                teamSel.appendChild(og);
+            });
+        } else {
+            filtered.forEach(function(t) { teamSel.appendChild(makeTeamOption(t)); });
+        }
+
+        teamSel.disabled = false;
+    }
+
+    // ─── Reset helpers ────────────────────────────────────────────────────────
+    function resetLeague() {
+        var sel = document.getElementById('leagueSelect');
+        sel.innerHTML = '';
+        addBlank(sel, '— Select a level first —');
+        sel.disabled = true;
+    }
+
+    function resetTeam(mode) {
+        var sel = document.getElementById('teamSelect');
+        sel.innerHTML = '';
+        var msg = (mode === 'league') ? '— Select a league first —' : '— Select an organization first —';
+        addBlank(sel, msg);
+        sel.disabled = true;
+    }
+
+    // ─── Option builders ──────────────────────────────────────────────────────
+    function addBlank(sel, text) {
+        var o = document.createElement('option');
+        o.value = '';
+        o.textContent = text;
+        sel.appendChild(o);
+    }
+
+    function addOpt(sel, val, text) {
+        var o = document.createElement('option');
+        o.value = val;
+        o.textContent = text;
+        sel.appendChild(o);
+    }
+
+    function makeTeamOption(t) {
+        var o = document.createElement('option');
+        o.value = t.id;
+        o.setAttribute('data-abbr',          t.abbr);
+        o.setAttribute('data-name',          t.name);
+        o.setAttribute('data-slug',          t.slug);
+        o.setAttribute('data-parent-org-id', t.parentOrgId);
+        o.textContent = t.name;
+        return o;
+    }
+
+    // ─── Settings: save ───────────────────────────────────────────────────────
+    function saveSettings() {
+        if (!websocket || !piUUID) return;
+        var mode      = getBrowseBy();
+        var filterSel = document.getElementById('filterSelect');
+        var leagueSel = document.getElementById('leagueSelect');
+        var teamSel   = document.getElementById('teamSelect');
+        var linkSel   = document.getElementById('linkType');
+
+        if (!teamSel.value) return;
+
+        var opt = teamSel.options[teamSel.selectedIndex];
+        var settings = {
+            teamId:          teamSel.value,
+            teamAbbr:        opt.getAttribute('data-abbr')           || '',
+            teamDisplayName: opt.getAttribute('data-name')           || '',
+            teamSlug:        opt.getAttribute('data-slug')           || '',
+            parentOrgId:     parseInt(opt.getAttribute('data-parent-org-id'), 10) || 0,
+            browseBy:        mode,
+            filterValue:     filterSel.value,
+            leagueId:        (mode === 'level') ? leagueSel.value : '',
+            linkType:        linkSel.value
+        };
+
+        websocket.send(JSON.stringify({ event: 'setSettings',  context: piUUID, payload: settings }));
+        websocket.send(JSON.stringify({ event: 'sendToPlugin', context: piUUID, action: actionUUID,
+            payload: { event: 'settingsChanged', settings: settings } }));
+    }
+
+    // ─── Settings: restore ────────────────────────────────────────────────────
+    function applySettings(s) {
+        if (!s) return;
+
+        var mode = s.browseBy || 'level';
+        document.querySelector('input[name="browseBy"][value="' + mode + '"]').checked = true;
+        updateToggleUI();
+        initFilterDropdown();
+
+        if (mode === 'level') {
+            // Restore level
+            if (s.filterValue) {
+                document.getElementById('filterSelect').value = s.filterValue;
+                populateLeagues(s.filterValue);
+            }
+            // Restore league
+            if (s.leagueId) {
+                document.getElementById('leagueSelect').value = s.leagueId;
+                populateTeams(s.leagueId, 'league');
+            }
+        } else {
+            // Restore org
+            if (s.filterValue) {
+                document.getElementById('filterSelect').value = s.filterValue;
+                populateTeams(s.filterValue, 'org');
+            }
+        }
+
+        // Restore team
+        if (s.teamId) {
+            document.getElementById('teamSelect').value = s.teamId;
+        }
+
+        // Restore link type
+        if (s.linkType) {
+            document.getElementById('linkType').value = s.linkType;
+        }
+    }
+
+    // ─── Toggle UI ────────────────────────────────────────────────────────────
+    function updateToggleUI() {
+        var mode = getBrowseBy();
+        document.getElementById('btnLevel').classList.toggle('active', mode === 'level');
+        document.getElementById('btnOrg').classList.toggle('active',   mode === 'org');
+    }
+
+    // ─── Event listeners ──────────────────────────────────────────────────────
+    document.querySelectorAll('.toggle-group label').forEach(function(lbl) {
+        lbl.addEventListener('click', function() {
+            lbl.querySelector('input[type="radio"]').checked = true;
+            updateToggleUI();
+            if (teamsReady) initFilterDropdown();
+        });
+    });
+
+    document.getElementById('filterSelect').addEventListener('change', function() {
+        var mode = getBrowseBy();
+        if (mode === 'level') {
+            populateLeagues(this.value);
+        } else {
+            populateTeams(this.value, 'org');
+        }
+    });
+
+    document.getElementById('leagueSelect').addEventListener('change', function() {
+        populateTeams(this.value, 'league');
+    });
+
+    document.getElementById('teamSelect').addEventListener('change', function() {
+        if (this.value) saveSettings();
+    });
+
+    document.getElementById('linkType').addEventListener('change', saveSettings);
+
+    // ─── Stream Deck connection ───────────────────────────────────────────────
+    function connectElgatoStreamDeckSocket(port, propertyInspectorUUID, registerEvent, info, actionInfo) {
+        piUUID = propertyInspectorUUID;
+        try { actionUUID = JSON.parse(actionInfo).action; } catch(e) {}
+
+        websocket = new WebSocket('ws://127.0.0.1:' + port);
+
+        websocket.onopen = function() {
+            websocket.send(JSON.stringify({ event: registerEvent, uuid: propertyInspectorUUID }));
+            websocket.send(JSON.stringify({ event: 'getSettings', context: propertyInspectorUUID }));
+        };
+
+        websocket.onmessage = function(evt) {
+            try {
+                var data = JSON.parse(evt.data);
+                if (data.event === 'didReceiveSettings') {
+                    var s = data.payload && data.payload.settings;
+                    if (teamsReady) { applySettings(s); }
+                    else            { pendingSettings = s; }
+                }
+            } catch(e) {}
+        };
+
+        setStatus('Loading teams…');
+        fetchTeams();
+    }
+</script>
+
+<div style="margin-top: 20px; padding-top: 10px; border-top: 1px solid #444; text-align: center; color: #666; font-size: 10px; line-height: 1.5;">
+    Created by T.J. Lauerman<br>aka ThatSportsGamer
+</div>
+
+</body>
+</html>
