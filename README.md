@@ -128,4 +128,6 @@ Bug reports and feature requests are welcome — open an [Issue](../../issues) t
 
 Created by **T.J. Lauerman aka ThatSportsGamer**
 
+Created with Claude Cowork by Anthropic
+
 Data provided by the [MLB Stats API](https://statsapi.mlb.com)
