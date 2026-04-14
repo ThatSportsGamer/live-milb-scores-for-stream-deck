@@ -49,7 +49,11 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 | High-A | Midwest League, Northwest League, South Atlantic League |
 | Single-A | California League, Carolina League, Florida State League |
 
+![Browse by League](screenshots/LiveMiLBScoresSettingsSelectByLeague.png)
+
 **Browse by MLB Organization** — pick an MLB parent club to see all of their affiliates grouped by level.
+
+![Browse by MLB Organization](screenshots/LiveMiLBScoresSettingsSelectByOrg.png)
 
 3. Choose what happens when you press the button:
    - **MiLB Gameday (free)** — opens the game's Gameday page on MiLB.com
