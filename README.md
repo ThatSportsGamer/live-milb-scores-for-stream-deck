@@ -75,6 +75,8 @@ That's it. The button will load your team's game within a few seconds and refres
 
 ## What the Button Shows
 
+![Live score button](screenshots/LiveMiLBScoresInAction.png)
+
 **Before the game:**
 ```
 CLT @ JAX
