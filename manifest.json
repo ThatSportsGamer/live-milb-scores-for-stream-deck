@@ -4,7 +4,7 @@
     "Description": "Shows live MiLB scores on your Stream Deck. Each button tracks one team — see the current score, inning, and game status at a glance.",
     "Name": "Live MiLB Scores",
     "Icon": "imgs/plugin-icon",
-    "Version": "1.0.0",
+    "Version": "1.0.3",
     "SDKVersion": 2,
     "Software": {
         "MinimumVersion": "6.0"

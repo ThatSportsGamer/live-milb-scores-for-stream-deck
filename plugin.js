@@ -167,6 +167,7 @@ class SimpleWS extends events.EventEmitter {
 // ── Plugin state ──────────────────────────────────────────────────────────────
 const instances     = new Map(); // context -> settings
 const prevScores    = new Map(); // context -> { awayRuns, homeRuns }
+const prevState     = new Map(); // context -> last known game state string
 const flashing      = new Set();
 const refreshing    = new Set();
 const lastRender    = new Map();
@@ -210,6 +211,7 @@ function handleEvent({ event, context, payload }) {
         case 'willDisappear':
             instances.delete(context);
             prevScores.delete(context);
+            prevState.delete(context);
             lastRender.delete(context);
             currentGame.delete(context);
             refreshing.delete(context);
@@ -276,6 +278,20 @@ async function refreshButton(context) {
             gameState: game.state,
         } : null);
 
+        // Detect live → final transition and play fireworks
+        const prevGameState = prevState.get(context);
+        prevState.set(context, game ? game.state : null);
+        if (prevGameState === 'live' && game && game.state === 'final') {
+            const winnerIsHome = game.homeRuns >= game.awayRuns;
+            const winnerName   = winnerIsHome ? game.homeName : game.awayName;
+            const winnerOrgId  = winnerIsHome ? game.homeParentOrgId : game.awayParentOrgId;
+            const winnerColor  = PARENT_ORG_COLOR[winnerOrgId] || '#FFD700';
+            log('Game over — fireworks for', winnerName);
+            refreshing.delete(context);
+            playFireworks(context, winnerName, winnerColor).catch(e => log('fireworks error:', e.message));
+            return;
+        }
+
         const lines   = buildLines(game, cfg);
         const spacing = lines.some(l => typeof l === 'object') ? 1.2 : 1.4;
         log('→', JSON.stringify(lines));
@@ -320,15 +336,23 @@ function buildLines(game, cfg) {
     const abbr = cfg.teamAbbr || 'MiLB';
     if (!game)                    return [abbr, 'No Game'];
     if (game.state === 'preview') return [game.matchup, game.time];
+    if (game.state === 'ppd')        return [game.matchup, { text: 'PPD',   fs: 16, color: '#E74C3C' }];
+    if (game.state === 'susp')       return [game.matchup, { text: 'SUSP',  fs: 16, color: '#E74C3C' }];
+    if (game.state === 'delay')      return [game.matchup, { text: 'DELAY', fs: 14, color: '#3498DB' }];
+    if (game.state === 'delay-live') return [
+        { text: game.awayAbbr + ' ' + game.awayRuns, fs: 18 },
+        { text: game.homeAbbr + ' ' + game.homeRuns, fs: 18 },
+        { text: 'DELAY',                              fs: 14, color: '#3498DB' },
+    ];
     if (game.state === 'live')    return [
         { text: game.awayAbbr + ' ' + game.awayRuns, fs: 18 },
         { text: game.homeAbbr + ' ' + game.homeRuns, fs: 18 },
-        { text: game.half + game.inn,                fs: 12 },
+        { text: game.half + game.inn,                fs: 14, color: '#FFD700' },
     ];
     if (game.state === 'final')   return [
         { text: game.awayAbbr + ' ' + game.awayRuns, fs: 18 },
         { text: game.homeAbbr + ' ' + game.homeRuns, fs: 18 },
-        { text: 'Final',                              fs: 12 },
+        { text: 'Final',                              fs: 14, color: '#FFD700' },
     ];
     return [abbr, '---'];
 }
@@ -400,7 +424,7 @@ function fetchTodayGame(teamId) {
             let body = '';
             res.on('data', chunk => body += chunk);
             res.on('end', () => {
-                try { resolve(parseSchedule(JSON.parse(body), parseInt(teamId, 10))); }
+                try { resolve(parseSchedule(JSON.parse(body))); }
                 catch (e) { reject(e); }
             });
         });
@@ -415,7 +439,7 @@ function toSlug(name) {
     return (name || '').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
 
-function parseSchedule(data, teamId) {
+function parseSchedule(data) {
     try {
         if (!data?.dates?.length) { log('API: no dates (off day)'); return null; }
 
@@ -423,41 +447,60 @@ function parseSchedule(data, teamId) {
         if (!games?.length) { log('API: no games'); return null; }
 
         const g      = games[0];
-        const status = g?.status?.abstractGameState;
+        const status   = g?.status?.abstractGameState;
+        const detailed = g?.status?.detailedState || '';
         if (!status) { log('API: missing status'); return null; }
 
         const homeId = g?.teams?.home?.team?.id;
         const awayId = g?.teams?.away?.team?.id;
         if (!homeId || !awayId) { log('API: missing team IDs'); return null; }
 
-        // Abbreviations and slugs from hydrated team data
-        const homeAbbr    = g?.teams?.home?.team?.abbreviation || 'HME';
-        const awayAbbr    = g?.teams?.away?.team?.abbreviation || 'AWY';
-        const homeSlug    = toSlug(g?.teams?.home?.team?.teamName);
-        const awaySlug    = toSlug(g?.teams?.away?.team?.teamName);
+        // Abbreviations, names, slugs, and parent org IDs from hydrated team data
+        const homeAbbr        = g?.teams?.home?.team?.abbreviation || 'HME';
+        const awayAbbr        = g?.teams?.away?.team?.abbreviation || 'AWY';
+        const homeName        = g?.teams?.home?.team?.teamName || homeAbbr;
+        const awayName        = g?.teams?.away?.team?.teamName || awayAbbr;
+        const homeSlug        = toSlug(g?.teams?.home?.team?.teamName);
+        const awaySlug        = toSlug(g?.teams?.away?.team?.teamName);
+        const homeParentOrgId = g?.teams?.home?.team?.parentOrgId || g?.teams?.home?.team?.parentTeamId;
+        const awayParentOrgId = g?.teams?.away?.team?.parentOrgId || g?.teams?.away?.team?.parentTeamId;
         const matchup     = awayAbbr + ' @ ' + homeAbbr;
         const gamePk      = g.gamePk;
         const gameDate    = g.gameDate ? g.gameDate.slice(0, 10).replace(/-/g, '/') : '2000/01/01';
         const ls          = g.linescore;
 
-        log('API:', status, matchup, 'pk=' + gamePk);
+        log('API:', status, detailed, matchup, 'pk=' + gamePk);
+
+        // Special states — check detailedState first so they override abstractGameState
+        if (detailed.startsWith('Postponed'))         return { state: 'ppd',   matchup, gamePk, gameDate };
+        if (detailed.startsWith('Suspended'))         return { state: 'susp',  matchup, gamePk, gameDate };
+        if (detailed.toLowerCase().includes('delay')) {
+            // Mid-game delay: game started, show score with DELAY where inning would be
+            const inn = ls?.currentInning;
+            if (inn) {
+                const homeRuns = ls?.teams?.home?.runs ?? 0;
+                const awayRuns = ls?.teams?.away?.runs ?? 0;
+                return { state: 'delay-live', matchup, homeAbbr, awayAbbr, homeId, awayId, homeRuns, awayRuns, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId };
+            }
+            return { state: 'delay', matchup, gamePk, gameDate };
+        }
 
         if (status === 'Preview') {
-            return { state: 'preview', matchup, time: fmtTime(g.gameDate), gamePk, gameDate, homeSlug, awaySlug, homeId, awayId };
+            return { state: 'preview', matchup, time: fmtTime(g.gameDate), gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, homeName, awayName, homeParentOrgId, awayParentOrgId };
         }
 
         const homeRuns = ls?.teams?.home?.runs ?? 0;
         const awayRuns = ls?.teams?.away?.runs ?? 0;
 
         if (status === 'Final') {
-            return { state: 'final', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, gamePk, gameDate };
+            return { state: 'final', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId };
         }
 
         // Live
         const inn  = ls?.currentInning || '?';
         const half = ls?.inningHalf === 'Top' ? '\u25b2' : '\u25bc';
 
-        return { state: 'live', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, inn, half, gamePk, gameDate };
+        return { state: 'live', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, inn, half, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId };
 
     } catch (e) {
         log('parseSchedule error:', e.message);
@@ -492,9 +535,9 @@ function makeImage(lines, lineSpacing = 1.4, bgColor = 'black') {
     const totalH      = lineHeights.reduce((a, b) => a + b, 0);
     let   y           = (H - totalH) / 2 + items[0].fs * 0.80;
 
-    const rows = items.map(({ text, fs }, i) => {
+    const rows = items.map(({ text, fs, color }, i) => {
         if (i > 0) y += lineHeights[i - 1] - items[i - 1].fs * 0.80 + fs * 0.80;
-        return `<text x="36" y="${y.toFixed(1)}" text-anchor="middle" fill="white" ` +
+        return `<text x="36" y="${y.toFixed(1)}" text-anchor="middle" fill="${color || 'white'}" ` +
                `font-family="Helvetica Neue,Arial,sans-serif" font-size="${fs}" font-weight="600">${escXml(text)}</text>`;
     }).join('');
 
@@ -504,6 +547,64 @@ function makeImage(lines, lineSpacing = 1.4, bgColor = 'black') {
         rows + `</svg>`;
 
     return 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
+}
+
+function makeFireworks(frame, winnerColor, winnerName) {
+    const W = 72, H = 72;
+    const cx = 36, cy = 36;
+    const COLORS = [winnerColor, '#FFD700', '#FFFFFF'];
+
+    let circles = '';
+    [0, 4, 8, 12, 16, 20, 24, 28, 32, 36].forEach((startFrame, burstIdx) => {
+        const f = frame - startFrame;
+        if (f < 0 || f >= 6) return;
+        const progress = f / 5;
+        const r        = 5 + progress * 28;
+        const pSize    = Math.max(0.5, 3.5 - progress * 2.5);
+        const opacity  = (1 - progress * 0.65).toFixed(2);
+        for (let i = 0; i < 8; i++) {
+            const angle = (i * 45 + burstIdx * 22.5) * Math.PI / 180;
+            const px    = (cx + r * Math.cos(angle)).toFixed(1);
+            const py    = (cy + r * Math.sin(angle)).toFixed(1);
+            const color = COLORS[(i + burstIdx) % COLORS.length];
+            circles += `<circle cx="${px}" cy="${py}" r="${pSize.toFixed(1)}" fill="${color}" opacity="${opacity}"/>`;
+        }
+    });
+
+    const throb   = Math.floor(frame / 2) % 2 === 0;
+    const winSize = throb ? 20 : 16;
+    let nameSize = 13;
+    while (nameSize > 7 && winnerName.length * nameSize * 0.62 > 62) nameSize--;
+    const nameY = throb ? 25 : 27;
+
+    const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="144" height="144" overflow="hidden">` +
+        `<rect width="${W}" height="${H}" fill="black"/>` +
+        circles +
+        `<text x="36" y="${nameY}" text-anchor="middle" fill="white" ` +
+        `font-family="Helvetica Neue,Arial,sans-serif" font-size="${nameSize}" font-weight="700">${escXml(winnerName)}</text>` +
+        `<text x="36" y="50" text-anchor="middle" fill="#FFD700" ` +
+        `font-family="Helvetica Neue,Arial,sans-serif" font-size="${winSize}" font-weight="800">WIN!</text>` +
+        `</svg>`;
+
+    return 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
+}
+
+async function playFireworks(context, winnerName, winnerColor) {
+    if (flashing.has(context)) return;
+    flashing.add(context);
+    log('→ fireworks for', winnerName, winnerColor);
+    try {
+        for (let i = 0; i < 42; i++) {
+            const img = makeFireworks(i, winnerColor, winnerName);
+            ws.send(JSON.stringify({ event: 'setImage', context, payload: { image: img, target: 0 } }));
+            await sleep(120);
+        }
+    } finally {
+        flashing.delete(context);
+        lastRender.delete(context);
+        refreshButton(context);
+    }
 }
 
 function setButton(context, lines, lineSpacing, bgColor) {
