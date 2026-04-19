@@ -29,6 +29,8 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 - Pre-game rain delay displays DELAY in blue
 - Mid-game rain delay keeps the current score visible with DELAY in blue where the inning indicator normally sits
 
+*Note: v1.0.2 was an internal build — all changes are included here.*
+
 **v1.0.2**
 - Inning indicator and "Final" label now display in yellow
 - End-of-game fireworks animation with winning team's name and colors
