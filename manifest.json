@@ -5,6 +5,7 @@
     "Name": "Live MiLB Scores",
     "URL": "https://github.com/ThatSportsGamer/live-milb-scores-for-stream-deck",
     "Icon": "imgs/plugin-icon",
+    "CategoryIcon": "imgs/category-icon",
     "Version": "1.0.3",
     "SDKVersion": 2,
     "Software": {
