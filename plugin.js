@@ -411,6 +411,8 @@ function buildGameUrl(game, linkType) {
 function fetchTodayGame(teamId) {
     return new Promise((resolve, reject) => {
         const now  = new Date();
+        // Don't roll to the next day's schedule until 2am — covers late-running games
+        if (now.getHours() < 2) now.setDate(now.getDate() - 1);
         const date = now.getFullYear() + '-' +
                      String(now.getMonth() + 1).padStart(2, '0') + '-' +
                      String(now.getDate()).padStart(2, '0');
