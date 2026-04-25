@@ -4,10 +4,11 @@
     "Description": "Shows live MiLB scores on your Stream Deck. Each button tracks one team — see the current score, inning, and game status at a glance.",
     "Name": "Live MiLB Scores",
     "UUID": "com.tj.livemilbscores",
+    "Category": "Live Sports Scores",
     "URL": "https://github.com/ThatSportsGamer/live-milb-scores-for-stream-deck",
     "Icon": "imgs/plugin-icon",
     "CategoryIcon": "imgs/category-icon",
-    "Version": "1.0.4.0",
+    "Version": "1.0.5.0",
     "SDKVersion": 3,
     "Software": {
         "MinimumVersion": "6.9"

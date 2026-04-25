@@ -5,7 +5,7 @@
 
 A Stream Deck plugin that shows live Minor League Baseball scores directly on your buttons. Each button tracks one team and updates automatically every 30 seconds.
 
-![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.4-green)
+![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.5-green)
 
 ---
 
@@ -23,6 +23,10 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 ---
 
 ## Recent Updates
+
+**v1.0.5.0**
+- Updated action and category icons to white on transparent background
+- Added plugin category for Stream Deck action picker grouping
 
 **v1.0.4.0**
 - Schedule now holds on the current day's games until 2 AM local time, so late-running games stay on the button until they finish
