@@ -374,7 +374,7 @@ const PARENT_ORG_COLOR = {
     119: '#005A9C', // LAD Dodgers
     120: '#AB0003', // WSH Nationals
     121: '#002D72', // NYM Mets
-    133: '#006B3F', // OAK Athletics
+    133: '#006B3F', // ATH Athletics
     134: '#FDB827', // PIT Pirates
     135: '#FFC425', // SD  Padres
     136: '#005C5C', // SEA Mariners
