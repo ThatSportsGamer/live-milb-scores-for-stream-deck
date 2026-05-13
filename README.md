@@ -5,7 +5,7 @@
 
 A Stream Deck plugin that shows live Minor League Baseball scores directly on your buttons. Each button tracks one team and updates automatically every 30 seconds.
 
-![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.6-green)
+![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.7-green)
 
 ---
 
@@ -16,6 +16,7 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 - **Final scores** — shows the final score with a "Final" label
 - **Score-change flash** — when your team scores, the button flashes in that team's MLB parent organization's color
 - **Browser shortcut** — press any button to open that game on MiLB Gameday or MiLB Live Stream
+- **Doubleheader support** — automatically shows Game 1, then switches to Game 2 when it ends; G1/G2 label keeps you oriented
 - **No-flicker updates** — buttons only redraw when the display actually changes
 - **Multi-button support** — add as many team buttons as you want, each refreshes independently
 - **Always up-to-date team list** — teams are loaded live from the MiLB API, so affiliate changes between seasons are reflected automatically
@@ -23,6 +24,11 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 ---
 
 ## Recent Updates
+
+**v1.0.7.0**
+- Doubleheader support: automatically shows Game 1 until it ends, then switches to Game 2
+- G1/G2 label appears next to the inning indicator, start time, or final/PPD/SUSP status so you always know which game you're watching
+- Game 2 start time TBD handled gracefully — shows "TBD" instead of a blank or wrong time
 
 **v1.0.6.0**
 - Updated Oakland Athletics to Athletics (ATH) to reflect team's relocation to Sacramento
