@@ -422,7 +422,10 @@ function buildLines(game, cfg) {
 
     const gl = game.gameLabel ? ' ' + game.gameLabel : '';
 
-    if (game.state === 'preview') return [game.matchup, game.time + gl];
+    if (game.state === 'preview') {
+        if (game.gameLabel) return [game.matchup, game.time, game.gameLabel];
+        return [game.matchup, game.time];
+    }
     if (game.state === 'ppd')     return [game.matchup, { text: 'PPD'   + gl, fs: 16,           color: '#E74C3C' }];
     if (game.state === 'susp')    return [game.matchup, { text: 'SUSP'  + gl, fs: gl ? 14 : 16, color: '#E74C3C' }];
     if (game.state === 'delay')   return [game.matchup, { text: 'DELAY' + gl, fs: gl ? 13 : 14, color: '#3498DB' }];
