@@ -5,7 +5,7 @@
 
 A Stream Deck plugin that shows live Minor League Baseball scores directly on your buttons. Each button tracks one team and updates automatically every 30 seconds.
 
-![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.7-green)
+![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.9-green)
 
 ---
 
@@ -15,8 +15,9 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 - **Pre-game** — shows the matchup (e.g. `CLT @ JAX`) and scheduled start time
 - **Final scores** — shows the final score with a "Final" label
 - **Score-change flash** — when your team scores, the button flashes in that team's MLB parent organization's color
-- **Browser shortcut** — press any button to open that game on MiLB Gameday or MiLB Live Stream
+- **Browser shortcut** — press any button to open that game on MiLB Gameday or MiLB.tv; switches to Gameday automatically 30 minutes after the final out
 - **Doubleheader support** — automatically shows Game 1, then switches to Game 2 when it ends; G1/G2 label keeps you oriented
+- **Doubleheader toggle** — double-click a doubleheader button to peek at the other game; auto-reverts after 15 seconds
 - **No-flicker updates** — buttons only redraw when the display actually changes
 - **Multi-button support** — add as many team buttons as you want, each refreshes independently
 - **Always up-to-date team list** — teams are loaded live from the MiLB API, so affiliate changes between seasons are reflected automatically
@@ -24,6 +25,16 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 ---
 
 ## Recent Updates
+
+**v1.0.9.0**
+- After a game ends, pressing a button set to MiLB.tv now opens Gameday instead — the MiLB.tv link stays active for 30 minutes post-game to cover any post-game coverage, then switches automatically
+- If the plugin loads and the game is already final, pressing the button goes straight to Gameday
+
+**v1.0.8.0**
+- Double-click a doubleheader button to peek at the other game — when Game 1 is active, see Game 2's start time; when Game 2 is active, see Game 1's final score
+- Double-click again to snap back to the active game, or wait 15 seconds to auto-revert
+- Single-clicking while viewing the other game opens that game's Gameday page
+- Score changes and end-of-game fireworks always return the button to the active game view
 
 **v1.0.7.0**
 - Doubleheader support: automatically shows Game 1 until it ends, then switches to Game 2
@@ -94,7 +105,7 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 
 3. Choose what happens when you press the button:
    - **MiLB Gameday (free)** — opens the game's Gameday page on MiLB.com
-   - **MiLB Live Stream (subscription)** — opens the live stream page on MiLB.com
+   - **MiLB.tv (subscription)** — opens the live stream page on MiLB.com
 
 That's it. The button will load your team's game within a few seconds and refresh every 30 seconds from there.
 
