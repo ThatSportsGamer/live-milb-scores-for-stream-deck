@@ -172,7 +172,17 @@ const flashing      = new Set();
 const refreshing    = new Set();
 const lastRender    = new Map();
 const currentGame   = new Map(); // context -> { gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, gameState }
-const refreshTimers = new Map();
+const refreshTimers    = new Map();
+
+// ── Doubleheader double-click toggle ──────────────────────────────────────────
+const gameFinalAt       = new Map(); // context -> timestamp when live→final was detected
+const dhOtherGame       = new Map(); // context -> parsed other-game object | null
+const dhViewOther       = new Map(); // context -> true while user is viewing the other game
+const dhRevertTimers    = new Map(); // context -> timeoutId for auto-revert
+const lastKeyUpTime     = new Map(); // context -> timestamp of last keyUp (double-click detection)
+const singleClickTimers = new Map(); // context -> timeoutId for pending single-click
+const DOUBLE_CLICK_MS   = 300;       // two taps within this window = double-click
+const DH_REVERT_MS      = 15_000;    // auto-revert to active game after 15 s
 
 // ── Connect to Stream Deck ────────────────────────────────────────────────────
 log('Connecting to Stream Deck on port', sdPort);
@@ -215,6 +225,14 @@ function handleEvent({ event, context, payload }) {
             lastRender.delete(context);
             currentGame.delete(context);
             refreshing.delete(context);
+            gameFinalAt.delete(context);
+            dhOtherGame.delete(context);
+            dhViewOther.delete(context);
+            clearTimeout(dhRevertTimers.get(context));
+            dhRevertTimers.delete(context);
+            clearTimeout(singleClickTimers.get(context));
+            singleClickTimers.delete(context);
+            lastKeyUpTime.delete(context);
             if (refreshTimers.has(context)) {
                 clearInterval(refreshTimers.get(context));
                 refreshTimers.delete(context);
@@ -229,16 +247,80 @@ function handleEvent({ event, context, payload }) {
             break;
 
         case 'keyUp': {
-            const cfg  = instances.get(context);
-            const game = currentGame.get(context);
-            if (game && game.gamePk) {
-                const url = buildGameUrl(game, cfg && cfg.linkType);
-                log('keyUp — opening URL:', url);
-                ws.send(JSON.stringify({ event: 'openUrl', payload: { url } }));
-            } else {
-                log('keyUp — no game, refreshing');
+            const cfg       = instances.get(context);
+            const game      = currentGame.get(context);
+            const otherGame = dhOtherGame.get(context);
+            const now       = Date.now();
+            const last      = lastKeyUpTime.get(context) || 0;
+            lastKeyUpTime.set(context, now);
+
+            if (otherGame && now - last < DOUBLE_CLICK_MS) {
+                // ── Double-click on a doubleheader: toggle other-game view ──
+                clearTimeout(singleClickTimers.get(context));
+                singleClickTimers.delete(context);
+                const goingToOther = !dhViewOther.get(context);
+                clearTimeout(dhRevertTimers.get(context));
+                if (goingToOther) {
+                    dhViewOther.set(context, true);
+                    log('DH double-click — showing other game');
+                    dhRevertTimers.set(context, setTimeout(() => {
+                        dhViewOther.delete(context);
+                        dhRevertTimers.delete(context);
+                        lastRender.delete(context);
+                        refreshButton(context);
+                    }, DH_REVERT_MS));
+                } else {
+                    dhViewOther.delete(context);
+                    dhRevertTimers.delete(context);
+                    log('DH double-click — back to active game');
+                }
                 lastRender.delete(context);
-                refreshButton(context);
+                const lines   = dhViewOther.get(context) ? buildOtherLines(otherGame) : buildLines(game, cfg);
+                const spacing = lines.some(l => typeof l === 'object') ? 1.2 : 1.4;
+                setButton(context, lines, spacing);
+
+            } else if (otherGame) {
+                // ── Single-click on a doubleheader: wait briefly for possible double-click ──
+                clearTimeout(singleClickTimers.get(context));
+                singleClickTimers.set(context, setTimeout(() => {
+                    singleClickTimers.delete(context);
+                    // If the user is viewing the other game, open that game's page
+                    const target = (dhViewOther.get(context) && otherGame) ? otherGame : game;
+                    if (target && target.gamePk) {
+                        const cfgLink = cfg && cfg.linkType;
+                        let effectiveLink = cfgLink;
+                        if (cfgLink === 'tv' && target.state === 'final') {
+                            const isActive = target === game;
+                            const ft = isActive ? gameFinalAt.get(context) : null;
+                            if (!ft || Date.now() - ft > 30 * 60 * 1000) effectiveLink = 'gameday';
+                        }
+                        const url = buildGameUrl(target, effectiveLink);
+                        log('DH keyUp (single) — opening URL:', url);
+                        ws.send(JSON.stringify({ event: 'openUrl', payload: { url } }));
+                    } else {
+                        log('DH keyUp (single) — no game, refreshing');
+                        lastRender.delete(context);
+                        refreshButton(context);
+                    }
+                }, DOUBLE_CLICK_MS + 50));
+
+            } else {
+                // ── Non-doubleheader: fire immediately ──
+                if (game && game.gamePk) {
+                    const cfgLink = cfg && cfg.linkType;
+                    let effectiveLink = cfgLink;
+                    if (cfgLink === 'tv' && game.state === 'final') {
+                        const ft = gameFinalAt.get(context);
+                        if (!ft || Date.now() - ft > 30 * 60 * 1000) effectiveLink = 'gameday';
+                    }
+                    const url = buildGameUrl(game, effectiveLink);
+                    log('keyUp — opening URL:', url);
+                    ws.send(JSON.stringify({ event: 'openUrl', payload: { url } }));
+                } else {
+                    log('keyUp — no game, refreshing');
+                    lastRender.delete(context);
+                    refreshButton(context);
+                }
             }
             break;
         }
@@ -268,15 +350,9 @@ async function refreshButton(context) {
     log('Refreshing', cfg.teamAbbr || cfg.teamId);
     try {
         const game = await fetchTodayGame(cfg.teamId);
-        currentGame.set(context, game ? {
-            gamePk:    game.gamePk,
-            gameDate:  game.gameDate,
-            homeSlug:  game.homeSlug,
-            awaySlug:  game.awaySlug,
-            homeId:    game.homeId,
-            awayId:    game.awayId,
-            gameState: game.state,
-        } : null);
+        currentGame.set(context, game || null);
+        dhOtherGame.set(context, game?.otherGame || null);
+        if (!game || game.state !== 'final') gameFinalAt.delete(context);
 
         // Detect live → final transition and play fireworks
         const prevGameState = prevState.get(context);
@@ -287,13 +363,18 @@ async function refreshButton(context) {
             const winnerOrgId  = winnerIsHome ? game.homeParentOrgId : game.awayParentOrgId;
             const winnerColor  = PARENT_ORG_COLOR[winnerOrgId] || '#FFD700';
             log('Game over — fireworks for', winnerName);
+            gameFinalAt.set(context, Date.now());
+            dhViewOther.delete(context);
+            clearTimeout(dhRevertTimers.get(context));
+            dhRevertTimers.delete(context);
             refreshing.delete(context);
             playFireworks(context, winnerName, winnerColor).catch(e => log('fireworks error:', e.message));
             return;
         }
 
-        const lines   = buildLines(game, cfg);
-        const spacing = lines.some(l => typeof l === 'object') ? 1.2 : 1.4;
+        const viewing  = dhViewOther.get(context) && game?.otherGame;
+        const lines    = viewing ? buildOtherLines(game.otherGame) : buildLines(game, cfg);
+        const spacing  = lines.some(l => typeof l === 'object') ? 1.2 : 1.4;
         log('→', JSON.stringify(lines));
 
         // Detect score change and flash
@@ -313,6 +394,9 @@ async function refreshButton(context) {
                         ? (PARENT_ORG_COLOR[cfg.parentOrgId] || '#FFFFFF')
                         : '#AAAAAA';
                     log('Score change — flashing', color);
+                    dhViewOther.delete(context);
+                    clearTimeout(dhRevertTimers.get(context));
+                    dhRevertTimers.delete(context);
                     refreshing.delete(context);
                     flashButton(context, color, lines, spacing).catch(e => log('flashButton error:', e.message));
                     return;
@@ -360,6 +444,36 @@ function buildLines(game, cfg) {
     return [abbr, '---'];
 }
 
+// ── Other-game view for doubleheader toggle ──────────────────────────────────────
+function buildOtherLines(other) {
+    if (!other) return ['---'];
+    const gl = other.gameLabel || '';
+    switch (other.state) {
+        case 'preview':
+            return [{ text: gl, fs: 16, color: '#AAAAAA' }, other.time];
+        case 'final':
+            return [
+                { text: other.awayAbbr + ' ' + other.awayRuns, fs: 18 },
+                { text: other.homeAbbr + ' ' + other.homeRuns, fs: 18 },
+                { text: gl + ' Final', fs: 13, color: '#FFD700' },
+            ];
+        case 'live':
+            return [
+                { text: other.awayAbbr + ' ' + other.awayRuns, fs: 18 },
+                { text: other.homeAbbr + ' ' + other.homeRuns, fs: 18 },
+                { text: other.half + other.inn + ' ' + gl, fs: 14, color: '#FFD700' },
+            ];
+        case 'ppd':
+            return [{ text: gl, fs: 16, color: '#AAAAAA' }, { text: 'PPD',   fs: 16, color: '#E74C3C' }];
+        case 'susp':
+            return [{ text: gl, fs: 16, color: '#AAAAAA' }, { text: 'SUSP',  fs: 14, color: '#E74C3C' }];
+        case 'delay':
+            return [{ text: gl, fs: 16, color: '#AAAAAA' }, { text: 'DELAY', fs: 14, color: '#3498DB' }];
+        default:
+            return [gl, '---'];
+    }
+}
+
 // ── Parent org colors (MLB team IDs → primary color) ─────────────────────────
 // Used to flash in the tracked team's affiliate color when they score.
 const PARENT_ORG_COLOR = {
@@ -402,8 +516,8 @@ function buildGameUrl(game, linkType) {
         return `https://www.milb.com/live-stream-games/g${game.gamePk}`;
     }
     // Gameday URL — suffix matches game state
-    const suffix = game.gameState === 'live'  ? 'live'
-                 : game.gameState === 'final' ? 'final'
+    const suffix = game.state === 'live'  ? 'live'
+                 : game.state === 'final' ? 'final'
                  : 'preview';
     const away = game.awaySlug || 'away';
     const home = game.homeSlug || 'home';
@@ -470,6 +584,49 @@ function parseSchedule(data) {
         const g         = games[gameIndex];
         const gameLabel = isDoubleheader ? (gameIndex === 0 ? 'G1' : 'G2') : null;
 
+        // Build a summary of the OTHER game for the doubleheader toggle
+        let otherGame = null;
+        if (isDoubleheader) {
+            const og         = games[gameIndex === 0 ? 1 : 0];
+            const ogLabel    = gameIndex === 0 ? 'G2' : 'G1';
+            const ogStatus   = og?.status?.abstractGameState;
+            const ogDetail   = og?.status?.detailedState || '';
+            const ogHomeAbbr = og?.teams?.home?.team?.abbreviation || 'HME';
+            const ogAwayAbbr = og?.teams?.away?.team?.abbreviation || 'AWY';
+            const ogLs       = og.linescore;
+            // Common fields needed by buildGameUrl so single-click opens the right game
+            const ogBase     = {
+                gameLabel: ogLabel,
+                gamePk:    og.gamePk,
+                gameDate:  og.gameDate ? og.gameDate.slice(0, 10).replace(/-/g, '/') : '2000/01/01',
+                homeSlug:  toSlug(og?.teams?.home?.team?.teamName),
+                awaySlug:  toSlug(og?.teams?.away?.team?.teamName),
+            };
+            if (ogDetail.startsWith('Postponed')) {
+                otherGame = { ...ogBase, state: 'ppd' };
+            } else if (ogDetail.startsWith('Suspended')) {
+                otherGame = { ...ogBase, state: 'susp' };
+            } else if (ogDetail.toLowerCase().includes('delay')) {
+                otherGame = { ...ogBase, state: 'delay' };
+            } else if (ogStatus === 'Preview') {
+                const ogTBD = og.status?.startTimeTBD || false;
+                otherGame = { ...ogBase, state: 'preview', time: ogTBD ? 'TBD' : fmtTime(og.gameDate) };
+            } else if (ogStatus === 'Final') {
+                otherGame = { ...ogBase, state: 'final',
+                    homeAbbr: ogHomeAbbr, awayAbbr: ogAwayAbbr,
+                    homeRuns: ogLs?.teams?.home?.runs ?? 0,
+                    awayRuns: ogLs?.teams?.away?.runs ?? 0 };
+            } else if (ogStatus === 'Live') {
+                const ogInn  = ogLs?.currentInning || '?';
+                const ogHalf = ogLs?.inningHalf === 'Top' ? '▲' : '▼';
+                otherGame = { ...ogBase, state: 'live',
+                    homeAbbr: ogHomeAbbr, awayAbbr: ogAwayAbbr,
+                    homeRuns: ogLs?.teams?.home?.runs ?? 0,
+                    awayRuns: ogLs?.teams?.away?.runs ?? 0,
+                    inn: ogInn, half: ogHalf };
+            }
+        }
+
         const status   = g?.status?.abstractGameState;
         const detailed = g?.status?.detailedState || '';
         if (!status) { log('API: missing status'); return null; }
@@ -496,36 +653,36 @@ function parseSchedule(data) {
         log('API:', status, detailed, matchup, 'pk=' + gamePk, gameLabel || '');
 
         // Special states — check detailedState first so they override abstractGameState
-        if (detailed.startsWith('Postponed'))         return { state: 'ppd',   matchup, gamePk, gameDate, gameLabel };
-        if (detailed.startsWith('Suspended'))         return { state: 'susp',  matchup, gamePk, gameDate, gameLabel };
+        if (detailed.startsWith('Postponed'))         return { state: 'ppd',   matchup, gamePk, gameDate, gameLabel, otherGame };
+        if (detailed.startsWith('Suspended'))         return { state: 'susp',  matchup, gamePk, gameDate, gameLabel, otherGame };
         if (detailed.toLowerCase().includes('delay')) {
             // Mid-game delay: game started, show score with DELAY where inning would be
             const inn = ls?.currentInning;
             if (inn) {
                 const homeRuns = ls?.teams?.home?.runs ?? 0;
                 const awayRuns = ls?.teams?.away?.runs ?? 0;
-                return { state: 'delay-live', matchup, homeAbbr, awayAbbr, homeId, awayId, homeRuns, awayRuns, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, gameLabel };
+                return { state: 'delay-live', matchup, homeAbbr, awayAbbr, homeId, awayId, homeRuns, awayRuns, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, gameLabel, otherGame };
             }
-            return { state: 'delay', matchup, gamePk, gameDate, gameLabel };
+            return { state: 'delay', matchup, gamePk, gameDate, gameLabel, otherGame };
         }
 
         if (status === 'Preview') {
             const time = startTBD ? 'TBD' : fmtTime(g.gameDate);
-            return { state: 'preview', matchup, time, gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, homeName, awayName, homeParentOrgId, awayParentOrgId, gameLabel };
+            return { state: 'preview', matchup, time, gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, homeName, awayName, homeParentOrgId, awayParentOrgId, gameLabel, otherGame };
         }
 
         const homeRuns = ls?.teams?.home?.runs ?? 0;
         const awayRuns = ls?.teams?.away?.runs ?? 0;
 
         if (status === 'Final') {
-            return { state: 'final', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, gameLabel };
+            return { state: 'final', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, gameLabel, otherGame };
         }
 
         // Live
         const inn  = ls?.currentInning || '?';
         const half = ls?.inningHalf === 'Top' ? '\u25b2' : '\u25bc';
 
-        return { state: 'live', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, inn, half, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, gameLabel };
+        return { state: 'live', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, inn, half, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, gameLabel, otherGame };
 
     } catch (e) {
         log('parseSchedule error:', e.message);
