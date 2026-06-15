@@ -415,6 +415,18 @@ async function refreshButton(context) {
     }
 }
 
+// ── Live inning row: out dots (SVG circles) + inning indicator ────────────────
+function liveInnLine(outs, innText) {
+    const n = outs ?? 0;
+    return {
+        dotFill1: n >= 1 ? '#E74C3C' : '#555555',
+        dotFill2: n >= 2 ? '#E74C3C' : '#555555',
+        innText,
+        innFs: innText.trim().length > 3 ? 11 : 14,
+        fs: 14,
+    };
+}
+
 // ── Build button display lines ────────────────────────────────────────────────
 function buildLines(game, cfg) {
     const abbr = cfg.teamAbbr || 'MiLB';
@@ -437,7 +449,7 @@ function buildLines(game, cfg) {
     if (game.state === 'live') return [
         { text: game.awayAbbr + ' ' + game.awayRuns, fs: 18 },
         { text: game.homeAbbr + ' ' + game.homeRuns, fs: 18 },
-        { text: game.half + game.inn + gl,            fs: 14, color: '#FFD700' },
+        liveInnLine(game.outs, game.half + game.inn + gl),
     ];
     if (game.state === 'final') return [
         { text: game.awayAbbr + ' ' + game.awayRuns, fs: 18 },
@@ -464,7 +476,7 @@ function buildOtherLines(other) {
             return [
                 { text: other.awayAbbr + ' ' + other.awayRuns, fs: 18 },
                 { text: other.homeAbbr + ' ' + other.homeRuns, fs: 18 },
-                { text: other.half + other.inn + ' ' + gl, fs: 14, color: '#FFD700' },
+                liveInnLine(other.outs, other.half + other.inn + (gl ? ' ' + gl : '')),
             ];
         case 'ppd':
             return [{ text: gl, fs: 16, color: '#AAAAAA' }, { text: 'PPD',   fs: 16, color: '#E74C3C' }];
@@ -626,7 +638,7 @@ function parseSchedule(data) {
                     homeAbbr: ogHomeAbbr, awayAbbr: ogAwayAbbr,
                     homeRuns: ogLs?.teams?.home?.runs ?? 0,
                     awayRuns: ogLs?.teams?.away?.runs ?? 0,
-                    inn: ogInn, half: ogHalf };
+                    inn: ogInn, half: ogHalf, outs: ogLs?.outs ?? 0 };
             }
         }
 
@@ -685,7 +697,7 @@ function parseSchedule(data) {
         const inn  = ls?.currentInning || '?';
         const half = ls?.inningHalf === 'Top' ? '\u25b2' : '\u25bc';
 
-        return { state: 'live', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, inn, half, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, gameLabel, otherGame };
+        return { state: 'live', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, inn, half, outs: ls?.outs ?? 0, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, gameLabel, otherGame };
 
     } catch (e) {
         log('parseSchedule error:', e.message);
@@ -720,8 +732,16 @@ function makeImage(lines, lineSpacing = 1.4, bgColor = 'black') {
     const totalH      = lineHeights.reduce((a, b) => a + b, 0);
     let   y           = (H - totalH) / 2 + items[0].fs * 0.80;
 
-    const rows = items.map(({ text, fs, color }, i) => {
+    const rows = items.map((item, i) => {
+        const { text, fs, color } = item;
         if (i > 0) y += lineHeights[i - 1] - items[i - 1].fs * 0.80 + fs * 0.80;
+        if ('dotFill1' in item) {
+            const cy = (y - 5).toFixed(1);
+            return `<circle cx="18" cy="${cy}" r="3.5" fill="${item.dotFill1}"/>` +
+                   `<circle cx="27" cy="${cy}" r="3.5" fill="${item.dotFill2}"/>` +
+                   `<text x="50" y="${y.toFixed(1)}" text-anchor="middle" fill="#FFD700" ` +
+                   `font-family="Helvetica Neue,Arial,sans-serif" font-size="${item.innFs}" font-weight="600">${escXml(item.innText)}</text>`;
+        }
         return `<text x="36" y="${y.toFixed(1)}" text-anchor="middle" fill="${color || 'white'}" ` +
                `font-family="Helvetica Neue,Arial,sans-serif" font-size="${fs}" font-weight="600">${escXml(text)}</text>`;
     }).join('');
