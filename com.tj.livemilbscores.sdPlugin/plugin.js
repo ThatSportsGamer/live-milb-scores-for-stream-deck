@@ -432,6 +432,14 @@ function buildLines(game, cfg) {
     const abbr = cfg.teamAbbr || 'MiLB';
     if (!game) return [abbr, 'No Game'];
 
+    if (game.state === 'nextgame') {
+        return [
+            { text: 'Next Game', fs: 12, color: '#AAAAAA' },
+            game.matchup,
+            game.dateLabel + ' ' + game.time,
+        ];
+    }
+
     const gl = game.gameLabel ? ' ' + game.gameLabel : '';
 
     if (game.state === 'preview') {
@@ -531,7 +539,7 @@ function buildGameUrl(game, linkType) {
         return `https://www.milb.com/live-stream-games/g${game.gamePk}`;
     }
     // Gameday URL — suffix matches game state
-    const suffix = game.state === 'live'  ? 'live'
+    const suffix = (game.state === 'live' || game.state === 'delay-live') ? 'live'
                  : game.state === 'final' ? 'final'
                  : 'preview';
     const away = game.awaySlug || 'away';
@@ -558,8 +566,69 @@ function fetchTodayGame(teamId) {
             let body = '';
             res.on('data', chunk => body += chunk);
             res.on('end', () => {
-                try { resolve(parseSchedule(JSON.parse(body))); }
+                try {
+                    const game = parseSchedule(JSON.parse(body));
+                    if (game) return resolve(game);
+                    // Truly an off day — look ahead to the next scheduled game instead of a dead end
+                    fetchNextGame(teamId, date).then(resolve).catch(() => resolve(null));
+                }
                 catch (e) { reject(e); }
+            });
+        });
+
+        req.on('error', reject);
+        req.setTimeout(10_000, () => { req.destroy(); reject(new Error('Request timed out')); });
+    });
+}
+
+// ── Next scheduled game (shown on off days instead of a dead-end "No Game") ──
+// Looks ahead up to two weeks from the given date for this team's next game.
+function fetchNextGame(teamId, afterDate) {
+    return new Promise((resolve, reject) => {
+        const start = new Date(afterDate + 'T00:00:00');
+        start.setDate(start.getDate() + 1);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 14);
+        const fmt = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        const url = 'https://statsapi.mlb.com/api/v1/schedule' +
+                    '?sportId=11,12,13,14&teamId=' + teamId +
+                    '&startDate=' + fmt(start) + '&endDate=' + fmt(end) +
+                    '&hydrate=team';
+
+        const req = https.get(url, { headers: { 'User-Agent': 'StreamDeckMiLBScores/1.0' } }, res => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => {
+                try {
+                    const data  = JSON.parse(body);
+                    const dates = data?.dates || [];
+                    for (const d of dates) {
+                        const games = (d.games || []).slice().sort((a, b) => (a.gameNumber || 1) - (b.gameNumber || 1));
+                        for (const g of games) {
+                            const homeAbbr = g?.teams?.home?.team?.abbreviation || 'HME';
+                            const awayAbbr = g?.teams?.away?.team?.abbreviation || 'AWY';
+                            const homeName = g?.teams?.home?.team?.teamName;
+                            const awayName = g?.teams?.away?.team?.teamName;
+                            if (!homeName || !awayName) continue;
+                            const matchup   = awayAbbr + ' @ ' + homeAbbr;
+                            const startISO  = g.gameDate || null;
+                            // Use the schedule bucket's official date, not the game's UTC timestamp —
+                            // slicing the ISO string rolls to the next day for any West Coast/Mountain
+                            // evening game whose UTC start crosses midnight (e.g. 7:10pm MT = 1:10am UTC).
+                            const gameDate  = d.date ? d.date.replace(/-/g, '/') : '2000/01/01';
+                            const startTBD  = g.status?.startTimeTBD || false;
+                            const dateLabel = startISO
+                                ? new Date(startISO).toLocaleDateString([], { month: 'numeric', day: 'numeric' })
+                                : '';
+                            const time = startTBD ? 'TBD' : fmtTime(startISO);
+                            return resolve({
+                                state: 'nextgame', matchup, dateLabel, time, gamePk: g.gamePk, gameDate,
+                                homeSlug: toSlug(homeName), awaySlug: toSlug(awayName),
+                            });
+                        }
+                    }
+                    resolve(null);
+                } catch (e) { reject(e); }
             });
         });
 
@@ -579,6 +648,11 @@ function parseSchedule(data) {
 
         const games = data.dates[0].games;
         if (!games?.length) { log('API: no games'); return null; }
+
+        // The schedule bucket's official date — use this for Gameday URLs, not the game's
+        // raw UTC timestamp, which rolls to the next calendar day for West Coast/Mountain
+        // evening games (e.g. 7:05pm MT = 1:05am UTC the following day).
+        const officialDate = data.dates[0].date ? data.dates[0].date.replace(/-/g, '/') : '2000/01/01';
 
         // Sort by gameNumber so doubleheaders are always Game 1 first, Game 2 second
         games.sort((a, b) => (a.gameNumber || 1) - (b.gameNumber || 1));
@@ -613,7 +687,7 @@ function parseSchedule(data) {
             const ogBase     = {
                 gameLabel: ogLabel,
                 gamePk:    og.gamePk,
-                gameDate:  og.gameDate ? og.gameDate.slice(0, 10).replace(/-/g, '/') : '2000/01/01',
+                gameDate:  officialDate,
                 homeSlug:  toSlug(og?.teams?.home?.team?.teamName),
                 awaySlug:  toSlug(og?.teams?.away?.team?.teamName),
             };
@@ -661,15 +735,15 @@ function parseSchedule(data) {
         const awayParentOrgId = g?.teams?.away?.team?.parentOrgId || g?.teams?.away?.team?.parentTeamId;
         const matchup     = awayAbbr + ' @ ' + homeAbbr;
         const gamePk      = g.gamePk;
-        const gameDate    = g.gameDate ? g.gameDate.slice(0, 10).replace(/-/g, '/') : '2000/01/01';
+        const gameDate    = officialDate;
         const ls          = g.linescore;
         const startTBD    = g.status?.startTimeTBD || false;
 
         log('API:', status, detailed, matchup, 'pk=' + gamePk, gameLabel || '');
 
         // Special states — check detailedState first so they override abstractGameState
-        if (detailed.startsWith('Postponed'))         return { state: 'ppd',   matchup, gamePk, gameDate, gameLabel, otherGame };
-        if (detailed.startsWith('Suspended'))         return { state: 'susp',  matchup, gamePk, gameDate, gameLabel, otherGame };
+        if (detailed.startsWith('Postponed'))         return { state: 'ppd',   matchup, gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, gameLabel, otherGame };
+        if (detailed.startsWith('Suspended'))         return { state: 'susp',  matchup, gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, gameLabel, otherGame };
         if (detailed.toLowerCase().includes('delay')) {
             // Mid-game delay: game started, show score with DELAY where inning would be
             const inn = ls?.currentInning;
@@ -678,7 +752,7 @@ function parseSchedule(data) {
                 const awayRuns = ls?.teams?.away?.runs ?? 0;
                 return { state: 'delay-live', matchup, homeAbbr, awayAbbr, homeId, awayId, homeRuns, awayRuns, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, gameLabel, otherGame };
             }
-            return { state: 'delay', matchup, time: startTBD ? 'TBD' : fmtTime(g.gameDate), gamePk, gameDate, gameLabel, otherGame };
+            return { state: 'delay', matchup, time: startTBD ? 'TBD' : fmtTime(g.gameDate), gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, gameLabel, otherGame };
         }
 
         if (status === 'Preview') {
@@ -689,7 +763,7 @@ function parseSchedule(data) {
         // The API flips abstractGameState to "Live" during pre-game warmups before first pitch.
         // Keep showing the start time until play actually begins.
         if (detailed === 'Pre-Game' || detailed === 'Warmup') {
-            const time = startTBD ? 'TBD' : fmtTime(startISO);
+            const time = startTBD ? 'TBD' : fmtTime(g.gameDate);
             return { state: 'preview', matchup, time, gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, homeName, awayName, homeParentOrgId, awayParentOrgId, gameLabel, otherGame };
         }
 
