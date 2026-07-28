@@ -5,7 +5,7 @@
 
 A Stream Deck plugin that shows live Minor League Baseball scores directly on your buttons. Each button tracks one team and updates automatically every 30 seconds.
 
-![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.20-green)
+![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.24-green)
 
 ---
 
@@ -26,6 +26,18 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 ---
 
 ## Recent Updates
+
+**v1.0.24.0**
+- Fixed: the postponed/suspended schedule-page fallback (added in v1.0.23.0) was linking to the wrong page — it used each team's literal home city (e.g. "Bridgewater," "Wappingers Falls") instead of the brand name MiLB.com actually uses in its URLs ("Somerset," "Hudson Valley")
+
+**v1.0.23.0**
+- Fixed: a postponed or suspended game whose gamePk gets reassigned to a new makeup date could send you into an infinite redirect loop on MiLB.com's Gameday page. Postponed/suspended buttons now link to your tracked team's schedule page instead, which always resolves
+
+**v1.0.22.0**
+- Fixed: a pre-game weather delay (e.g. "Delayed Start") could be misread as a mid-game delay because MLB's linescore data pre-populates a "Top 1" shell before first pitch — this in turn caused the previous fix's MiLB.tv fallback check to think the game had started and open the stream early. Now checks the game's actual live/preview status instead
+
+**v1.0.21.0**
+- Fixed: pressing a button set to MiLB.tv for a game delayed past its scheduled start time no longer opens the stream early — the plugin now checks the game's actual status instead of the clock, so a rain delay correctly falls back to Gameday until the game actually begins
 
 **v1.0.20.0**
 - Fixed: Gameday links now use the correct calendar date for evening games — West Coast/Mountain affiliates whose game time crosses into the next UTC day were getting a link one day ahead of the real game

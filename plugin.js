@@ -294,7 +294,7 @@ function handleEvent({ event, context, payload }) {
                             const ft = isActive ? gameFinalAt.get(context) : null;
                             if (!ft || Date.now() - ft > 30 * 60 * 1000) effectiveLink = 'gameday';
                         }
-                        const url = buildGameUrl(target, effectiveLink);
+                        const url = buildGameUrl(target, effectiveLink, cfg && cfg.teamId);
                         log('DH keyUp (single) — opening URL:', url);
                         ws.send(JSON.stringify({ event: 'openUrl', payload: { url } }));
                     } else {
@@ -313,7 +313,7 @@ function handleEvent({ event, context, payload }) {
                         const ft = gameFinalAt.get(context);
                         if (!ft || Date.now() - ft > 30 * 60 * 1000) effectiveLink = 'gameday';
                     }
-                    const url = buildGameUrl(game, effectiveLink);
+                    const url = buildGameUrl(game, effectiveLink, cfg && cfg.teamId);
                     log('keyUp — opening URL:', url);
                     ws.send(JSON.stringify({ event: 'openUrl', payload: { url } }));
                 } else {
@@ -533,10 +533,17 @@ const PARENT_ORG_COLOR = {
 };
 
 // ── URL building ──────────────────────────────────────────────────────────────
-function buildGameUrl(game, linkType) {
+function buildGameUrl(game, linkType, teamId) {
     if (!game || !game.gamePk) return 'https://www.milb.com';
-    if (linkType === 'tv') {
-        return `https://www.milb.com/live-stream-games/g${game.gamePk}`;
+    // A postponed (or suspended, pending makeup) game often gets its gamePk reassigned to
+    // a new date behind the scenes. MLB.com's Gameday redirects cleanly to the new page,
+    // but MiLB.com's site gets stuck in a redirect loop trying to resolve the old link —
+    // so instead of the specific /gameday/ page, send to our tracked team's schedule page.
+    if (game.state === 'ppd' || game.state === 'susp') {
+        const ourClubSlug = (teamId && Number(teamId) === game.homeId) ? game.homeClubSlug
+                          : (teamId && Number(teamId) === game.awayId) ? game.awayClubSlug
+                          : (game.awayClubSlug || game.homeClubSlug);
+        return ourClubSlug ? `https://www.milb.com/${ourClubSlug}/schedule` : 'https://www.milb.com';
     }
     // Gameday URL — suffix matches game state
     const suffix = (game.state === 'live' || game.state === 'delay-live') ? 'live'
@@ -544,6 +551,16 @@ function buildGameUrl(game, linkType) {
                  : 'preview';
     const away = game.awaySlug || 'away';
     const home = game.homeSlug || 'home';
+    if (linkType === 'tv') {
+        // Only send to the live stream once the game has actually started — checking
+        // elapsed time against the scheduled start breaks down on a rain delay, where
+        // the clock passes first pitch but the game (and stream) hasn't begun yet.
+        const gameStarted = game.state === 'live' || game.state === 'delay-live' || game.state === 'final';
+        if (!gameStarted) {
+            return `https://www.milb.com/gameday/${away}-vs-${home}/${game.gameDate}/${game.gamePk}/${suffix}`;
+        }
+        return `https://www.milb.com/live-stream-games/g${game.gamePk}`;
+    }
     return `https://www.milb.com/gameday/${away}-vs-${home}/${game.gameDate}/${game.gamePk}/${suffix}`;
 }
 
@@ -685,11 +702,15 @@ function parseSchedule(data) {
             const ogLs       = og.linescore;
             // Common fields needed by buildGameUrl so single-click opens the right game
             const ogBase     = {
-                gameLabel: ogLabel,
-                gamePk:    og.gamePk,
-                gameDate:  officialDate,
-                homeSlug:  toSlug(og?.teams?.home?.team?.teamName),
-                awaySlug:  toSlug(og?.teams?.away?.team?.teamName),
+                gameLabel:    ogLabel,
+                gamePk:       og.gamePk,
+                gameDate:     officialDate,
+                homeSlug:     toSlug(og?.teams?.home?.team?.teamName),
+                awaySlug:     toSlug(og?.teams?.away?.team?.teamName),
+                homeClubSlug:  toSlug(og?.teams?.home?.team?.shortName),
+                awayClubSlug:  toSlug(og?.teams?.away?.team?.shortName),
+                homeId:       og?.teams?.home?.team?.id,
+                awayId:       og?.teams?.away?.team?.id,
             };
             if (ogDetail.startsWith('Postponed')) {
                 otherGame = { ...ogBase, state: 'ppd' };
@@ -731,6 +752,13 @@ function parseSchedule(data) {
         const awayName        = g?.teams?.away?.team?.teamName || awayAbbr;
         const homeSlug        = toSlug(g?.teams?.home?.team?.teamName);
         const awaySlug        = toSlug(g?.teams?.away?.team?.teamName);
+        // MiLB.com's club schedule pages use a slug based on the team's brand/region name
+        // (shortName, e.g. "somerset", "hudson-valley") — NOT locationName, which is the
+        // literal city the team plays in and can differ from the brand (Somerset Patriots
+        // play in Bridgewater, Hudson Valley Renegades play in Wappingers Falls). Needed
+        // for the postponed-game fallback link below.
+        const homeClubSlug     = toSlug(g?.teams?.home?.team?.shortName);
+        const awayClubSlug     = toSlug(g?.teams?.away?.team?.shortName);
         const homeParentOrgId = g?.teams?.home?.team?.parentOrgId || g?.teams?.home?.team?.parentTeamId;
         const awayParentOrgId = g?.teams?.away?.team?.parentOrgId || g?.teams?.away?.team?.parentTeamId;
         const matchup     = awayAbbr + ' @ ' + homeAbbr;
@@ -742,12 +770,15 @@ function parseSchedule(data) {
         log('API:', status, detailed, matchup, 'pk=' + gamePk, gameLabel || '');
 
         // Special states — check detailedState first so they override abstractGameState
-        if (detailed.startsWith('Postponed'))         return { state: 'ppd',   matchup, gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, gameLabel, otherGame };
-        if (detailed.startsWith('Suspended'))         return { state: 'susp',  matchup, gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, gameLabel, otherGame };
+        if (detailed.startsWith('Postponed'))         return { state: 'ppd',   matchup, gamePk, gameDate, homeSlug, awaySlug, homeClubSlug, awayClubSlug, homeId, awayId, gameLabel, otherGame };
+        if (detailed.startsWith('Suspended'))         return { state: 'susp',  matchup, gamePk, gameDate, homeSlug, awaySlug, homeClubSlug, awayClubSlug, homeId, awayId, gameLabel, otherGame };
         if (detailed.toLowerCase().includes('delay')) {
-            // Mid-game delay: game started, show score with DELAY where inning would be
-            const inn = ls?.currentInning;
-            if (inn) {
+            // Distinguish a pre-game delay (e.g. "Delayed Start", status still "Preview")
+            // from a mid-game delay (status "Live"). MLB's linescore pre-populates a "Top 1"
+            // shell with a defense/offense lineup before first pitch, so checking for
+            // linescore.currentInning is NOT a reliable signal that the game has started —
+            // abstractGameState is the authoritative source.
+            if (status === 'Live') {
                 const homeRuns = ls?.teams?.home?.runs ?? 0;
                 const awayRuns = ls?.teams?.away?.runs ?? 0;
                 return { state: 'delay-live', matchup, homeAbbr, awayAbbr, homeId, awayId, homeRuns, awayRuns, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, gameLabel, otherGame };
