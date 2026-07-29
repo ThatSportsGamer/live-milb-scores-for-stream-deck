@@ -781,7 +781,7 @@ function parseSchedule(data) {
             if (status === 'Live') {
                 const homeRuns = ls?.teams?.home?.runs ?? 0;
                 const awayRuns = ls?.teams?.away?.runs ?? 0;
-                return { state: 'delay-live', matchup, homeAbbr, awayAbbr, homeId, awayId, homeRuns, awayRuns, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, gameLabel, otherGame };
+                return { state: 'delay-live', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, gameLabel, otherGame };
             }
             return { state: 'delay', matchup, time: startTBD ? 'TBD' : fmtTime(g.gameDate), gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, gameLabel, otherGame };
         }
