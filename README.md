@@ -1,7 +1,6 @@
 # Live MiLB Scores — Stream Deck Plugin
 
-<img src="screenshots/LiveMiLBScoresThumbnail.png" width=960 height=480>
-
+![Live MiLB Scores in action](screenshots/LiveMiLBScoresThumbnail.png)
 
 A Stream Deck plugin that shows live Minor League Baseball scores directly on your buttons. Each button tracks one team and updates automatically every 30 seconds.
 
@@ -115,7 +114,8 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 
 - [Elgato Stream Deck](https://www.elgato.com/stream-deck) hardware
 - [Stream Deck software](https://www.elgato.com/downloads) version 6.0 or later (Mac or Windows)
-- No account required for scores — the plugin uses MLB/MiLB's free public stats API
+- No account required to view scores — the plugin uses MLB/MiLB's free public stats API
+- A MiLB.tv subscription is required only if you choose the MiLB.tv link option; Gameday is free
 
 ---
 
@@ -185,19 +185,6 @@ Next Game
 CLT @ JAX
 7/25 7:05 PM
 ```
-
----
-
-## Supported Teams
-
-All four levels of affiliated Minor League Baseball are supported — 120 teams across 12 leagues. The team list is fetched live from the MiLB API each time you open the settings panel, so it stays accurate as affiliates change from season to season.
-
-| Level | Leagues |
-|-------|---------|
-| Triple-A | International League · Pacific Coast League |
-| Double-A | Eastern League · Southern League · Texas League |
-| High-A | Midwest League · Northwest League · South Atlantic League |
-| Single-A | California League · Carolina League · Florida State League |
 
 ---
 
