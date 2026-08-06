@@ -73,6 +73,86 @@
             margin-bottom: 12px;
         }
 
+        /* ── Search ── */
+        .search-wrap { position: relative; }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 7px 10px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-size: 13px;
+        }
+
+        input[type="text"]:disabled { opacity: 0.45; cursor: default; }
+        input[type="text"]::placeholder { color: #666; }
+        input[type="text"]:focus { outline: none; border-color: var(--accent-hi); }
+
+        .autocomplete-list {
+            position: absolute;
+            top: 100%;
+            left: 0; right: 0;
+            background: var(--surface);
+            border: 1px solid var(--accent-hi);
+            border-top: none;
+            border-radius: 0 0 var(--radius) var(--radius);
+            max-height: 180px;
+            overflow-y: auto;
+            z-index: 10;
+            display: none;
+        }
+
+        .autocomplete-list .ac-item {
+            padding: 7px 10px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text);
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .autocomplete-list .ac-item .ac-level {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .04em;
+            color: #888;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 3px;
+            padding: 1px 5px;
+            flex-shrink: 0;
+        }
+
+        .autocomplete-list .ac-item:last-child { border-bottom: none; }
+        .autocomplete-list .ac-item:hover,
+        .autocomplete-list .ac-item.active { background: var(--accent); color: #fff; }
+        .autocomplete-list .ac-item:hover .ac-level,
+        .autocomplete-list .ac-item.active .ac-level { color: #fff; border-color: rgba(255,255,255,.4); }
+
+        /* ── Divider ── */
+        .or-divider {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 12px 0;
+            color: #555;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+        .or-divider::before,
+        .or-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
         /* Browse By toggle */
         .toggle-group {
             display: flex;
@@ -133,6 +213,17 @@
 <body>
 
 <h2>⚾ Live MiLB Scores</h2>
+
+<!-- ── Search ── -->
+<div class="field-group">
+    <label for="searchBox">Search</label>
+    <div class="search-wrap">
+        <input type="text" id="searchBox" placeholder="Loading teams…" autocomplete="off" disabled/>
+        <div class="autocomplete-list" id="autocompleteList"></div>
+    </div>
+</div>
+
+<div class="or-divider">or browse</div>
 
 <!-- Browse By toggle -->
 <div class="field-group">
@@ -206,6 +297,7 @@
     var teamsReady = false;
 
     var LEVEL_LABELS = { 11: 'Triple-A', 12: 'Double-A', 13: 'High-A', 14: 'Single-A' };
+    var LEVEL_ABBR   = { 11: 'AAA', 12: 'AA', 13: 'A+', 14: 'A' };
 
     // 30 MLB parent orgs (sorted alphabetically, IDs are stable year-to-year)
     var MLB_ORGS = [
@@ -241,6 +333,16 @@
         { id: 120, name: 'Washington Nationals'   }
     ];
 
+    // Parent org abbreviations, keyed by parentOrgId (matches abbr used across the other plugins)
+    var MLB_ORG_ABBR = {
+        108: 'LAA', 109: 'ARI', 110: 'BAL', 111: 'BOS', 112: 'CHC',
+        113: 'CIN', 114: 'CLE', 115: 'COL', 116: 'DET', 117: 'HOU',
+        118: 'KC',  119: 'LAD', 120: 'WSH', 121: 'NYM', 133: 'ATH',
+        134: 'PIT', 135: 'SD',  136: 'SEA', 137: 'SF',  138: 'STL',
+        139: 'TB',  140: 'TEX', 141: 'TOR', 142: 'MIN', 143: 'PHI',
+        144: 'ATL', 145: 'CWS', 146: 'MIA', 147: 'NYY', 158: 'MIL'
+    };
+
     // ─── Slug helper (must match plugin.js exactly) ───────────────────────────
     function toSlug(name) {
         return (name || '').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
@@ -275,6 +377,7 @@
                 teamsReady = true;
                 setStatus('');
                 initFilterDropdown();
+                enableSearch();
 
                 if (pendingSettings) {
                     applySettings(pendingSettings);
@@ -283,8 +386,125 @@
             })
             .catch(function(err) {
                 setStatus('Could not load teams — check your connection.', true);
+                searchBox.placeholder = 'Could not load teams';
                 console.error('MiLB fetch error:', err);
             });
+    }
+
+    // ─── Search / autocomplete ────────────────────────────────────────────────
+    // Team list loads live from the API (unlike CFB's static roster), so the
+    // search box only becomes usable once fetchTeams() resolves.
+    var acList      = document.getElementById('autocompleteList');
+    var searchBox   = document.getElementById('searchBox');
+    var activeIndex = -1;
+
+    function enableSearch() {
+        searchBox.disabled     = false;
+        searchBox.placeholder  = 'e.g. Jersey Shore, BlueClaws, Rocket City…';
+    }
+
+    // Matches on team name, mascot name, abbreviation, or MLB parent org name — so
+    // searching "Braves" surfaces every affiliate across all four levels, not just
+    // teams whose own name contains the query.
+    function getMatches(query) {
+        var q = query.toLowerCase().trim();
+        if (!q) return [];
+        return allTeams.filter(function(t) {
+            return t.name.toLowerCase().indexOf(q) !== -1 ||
+                   t.teamName.toLowerCase().indexOf(q) !== -1 ||
+                   t.abbr.toLowerCase().indexOf(q) !== -1 ||
+                   t.parentOrgName.toLowerCase().indexOf(q) !== -1;
+        }).slice(0, 40); // cap the list — 120 teams is a lot to render at once
+    }
+
+    function showAutocomplete() {
+        acList.innerHTML = '';
+        activeIndex = -1;
+
+        if (!searchBox.value.trim() || !teamsReady) { acList.style.display = 'none'; return; }
+
+        var matches = getMatches(searchBox.value);
+
+        if (!matches.length) { acList.style.display = 'none'; return; }
+
+        matches.forEach(function(t) {
+            var div = document.createElement('div');
+            div.className = 'ac-item';
+
+            var nameSpan = document.createElement('span');
+            nameSpan.textContent = t.name;
+            div.appendChild(nameSpan);
+
+            var levelSpan = document.createElement('span');
+            levelSpan.className = 'ac-level';
+            levelSpan.textContent = (LEVEL_ABBR[t.sportId] || '') + (MLB_ORG_ABBR[t.parentOrgId] ? ' · ' + MLB_ORG_ABBR[t.parentOrgId] : '');
+            div.appendChild(levelSpan);
+
+            div.addEventListener('mousedown', function(e) {
+                e.preventDefault(); // keep focus off blur
+                selectTeamFromSearch(t);
+            });
+            acList.appendChild(div);
+        });
+
+        acList.style.display = 'block';
+    }
+
+    function hideAutocomplete() {
+        acList.style.display = 'none';
+        activeIndex = -1;
+    }
+
+    function navigateAutocomplete(dir) {
+        var items = acList.querySelectorAll('.ac-item');
+        if (!items.length) return;
+        items[activeIndex] && items[activeIndex].classList.remove('active');
+        activeIndex = (activeIndex + dir + items.length) % items.length;
+        items[activeIndex].classList.add('active');
+        items[activeIndex].scrollIntoView({ block: 'nearest' });
+    }
+
+    searchBox.addEventListener('input', showAutocomplete);
+
+    searchBox.addEventListener('keydown', function(e) {
+        if (acList.style.display === 'none') return;
+        if (e.key === 'ArrowDown') { e.preventDefault(); navigateAutocomplete(1); }
+        if (e.key === 'ArrowUp')   { e.preventDefault(); navigateAutocomplete(-1); }
+        if (e.key === 'Enter') {
+            var active = acList.querySelector('.ac-item.active');
+            if (active) {
+                e.preventDefault();
+                var idx   = Array.prototype.indexOf.call(acList.querySelectorAll('.ac-item'), active);
+                var match = getMatches(searchBox.value)[idx];
+                if (match) selectTeamFromSearch(match);
+            }
+        }
+        if (e.key === 'Escape') hideAutocomplete();
+    });
+
+    searchBox.addEventListener('blur', function() {
+        setTimeout(hideAutocomplete, 150);
+    });
+
+    // Picking a team via search drives the same level → league → team dropdown
+    // chain a manual browse would, so both paths stay in sync and settings are
+    // saved through the one existing saveSettings() path.
+    function selectTeamFromSearch(t) {
+        searchBox.value = t.name;
+        hideAutocomplete();
+
+        document.querySelector('input[name="browseBy"][value="level"]').checked = true;
+        updateToggleUI();
+        initFilterDropdown();
+
+        document.getElementById('filterSelect').value = t.sportId;
+        populateLeagues(t.sportId);
+
+        document.getElementById('leagueSelect').value = t.leagueId;
+        populateTeams(t.leagueId, 'league');
+
+        document.getElementById('teamSelect').value = t.id;
+        saveSettings();
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -511,6 +731,7 @@
         // Restore team
         if (s.teamId) {
             document.getElementById('teamSelect').value = s.teamId;
+            if (s.teamDisplayName) searchBox.value = s.teamDisplayName;
         }
 
         // Restore link type
@@ -549,7 +770,10 @@
     });
 
     document.getElementById('teamSelect').addEventListener('change', function() {
-        if (this.value) saveSettings();
+        if (!this.value) return;
+        var opt = this.options[this.selectedIndex];
+        searchBox.value = opt.getAttribute('data-name') || opt.textContent;
+        saveSettings();
     });
 
     document.getElementById('linkType').addEventListener('change', saveSettings);

@@ -4,7 +4,7 @@
 
 A Stream Deck plugin that shows live Minor League Baseball scores directly on your buttons. Each button tracks one team and updates automatically every 30 seconds.
 
-![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.25-green)
+![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.26-green)
 
 ---
 
@@ -20,11 +20,18 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 - **No-flicker updates** — buttons only redraw when the display actually changes
 - **Multi-button support** — add as many team buttons as you want, each refreshes independently
 - **Always up-to-date team list** — teams are loaded live from the MiLB API, so affiliate changes between seasons are reflected automatically
+- **Search** — type a team, city, or mascot name to jump straight to it instead of drilling through League/Organization dropdowns
 - **Next game on off days** — instead of a dead-end "No Game", the button shows your team's next scheduled matchup, date, and time
 
 ---
 
 ## Recent Updates
+
+**v1.0.26.0**
+- Added a search box to the settings panel (ported from Live CFB Scores) — type a team, city, or mascot name for autocomplete instead of drilling through the League/Organization dropdowns. Picking a result still syncs the dropdowns underneath, so both paths stay in sync
+- Search results show each team's level (AAA/AA/A+/A) as a small badge on the right, matching the layout used in Live NHL Scores' search box
+- That badge also shows the MLB parent org's abbreviation (e.g. "AAA · ATL")
+- Search now also matches on the MLB parent org's name — searching "Braves" surfaces every Atlanta affiliate across all four levels, not just teams whose own name contains "Braves"
 
 **v1.0.25.0**
 - Fixed: a mid-game rain delay could link to `/gameday/away-vs-home/...` (literal placeholder text) instead of the real team names — the team slugs were missing from that specific state's data
@@ -130,7 +137,7 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 ## Setup
 
 1. Drag the **Live MiLB Scores** action onto any button
-2. In the settings panel on the right, pick how you want to browse for your team:
+2. In the settings panel on the right, either type your team into the **Search** box for autocomplete, or browse for it manually:
 
 **Browse by League** — drill down by level, then league, then team:
 
