@@ -4,7 +4,7 @@
 
 A Stream Deck plugin that shows live Minor League Baseball scores directly on your buttons. Each button tracks one team and updates automatically every 30 seconds.
 
-![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.26-green)
+![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.28-green)
 
 ---
 
@@ -26,6 +26,12 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 ---
 
 ## Recent Updates
+
+**v1.0.28.0**
+- Fixed: pressing a button set to MiLB.tv during the Warmup state (right before first pitch, including right after a rain delay clears) fell back to Gameday instead of opening the stream — MiLB.tv already carries Warmup as pre-game coverage, so it now opens directly
+
+**v1.0.27.0**
+- Coming out of a rain delay, the button now shows `WARMUP` alongside the original scheduled time instead of just re-displaying that now-stale clock as if nothing happened
 
 **v1.0.26.0**
 - Added a search box to the settings panel (ported from Live CFB Scores) — type a team, city, or mascot name for autocomplete instead of drilling through the League/Organization dropdowns. Picking a result still syncs the dropdowns underneath, so both paths stay in sync
