@@ -208,6 +208,69 @@
             line-height: 1.5;
         }
         .info-box strong { color: var(--text); }
+
+        /* ── Background color ── */
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .checkbox-row input[type="checkbox"] {
+            width: 14px;
+            height: 14px;
+            accent-color: var(--accent-hi);
+            cursor: pointer;
+        }
+
+        .checkbox-row label {
+            margin: 0;
+            text-transform: none;
+            letter-spacing: normal;
+            font-size: 12px;
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        .bg-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .bg-controls.disabled { opacity: .4; pointer-events: none; }
+
+        input[type="color"] {
+            width: 34px;
+            height: 28px;
+            padding: 0;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            cursor: pointer;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            accent-color: var(--accent-hi);
+            cursor: pointer;
+        }
+
+        .opacity-value {
+            width: 34px;
+            text-align: right;
+            font-size: 11px;
+            color: #aaa;
+        }
+
+        .bg-hint {
+            margin-top: 6px;
+            font-size: 10.5px;
+            color: #777;
+            line-height: 1.4;
+        }
     </style>
 </head>
 <body>
@@ -273,6 +336,20 @@
         <option value="gameday">MiLB Gameday (free)</option>
         <option value="tv">MiLB.tv (subscription)</option>
     </select>
+</div>
+
+<div class="field-group">
+    <label>Key Background</label>
+    <div class="checkbox-row">
+        <input type="checkbox" id="bgEnabled"/>
+        <label for="bgEnabled">Use a custom background color</label>
+    </div>
+    <div class="bg-controls disabled" id="bgControls">
+        <input type="color" id="bgColorInput" value="#000000"/>
+        <input type="range" id="bgOpacityInput" min="10" max="100" value="100"/>
+        <span class="opacity-value" id="bgOpacityValue">100%</span>
+    </div>
+    <div class="bg-hint">Score and status text is white (or your team's color) — lighter or brighter backgrounds can make it harder to read.</div>
 </div>
 
 <div class="info-box">
@@ -675,10 +752,13 @@
     function saveSettings() {
         if (!websocket || !piUUID) return;
         var mode      = getBrowseBy();
-        var filterSel = document.getElementById('filterSelect');
-        var leagueSel = document.getElementById('leagueSelect');
-        var teamSel   = document.getElementById('teamSelect');
-        var linkSel   = document.getElementById('linkType');
+        var filterSel   = document.getElementById('filterSelect');
+        var leagueSel   = document.getElementById('leagueSelect');
+        var teamSel     = document.getElementById('teamSelect');
+        var linkSel     = document.getElementById('linkType');
+        var bgEnabledEl = document.getElementById('bgEnabled');
+        var bgColorEl   = document.getElementById('bgColorInput');
+        var bgOpacityEl = document.getElementById('bgOpacityInput');
 
         if (!teamSel.value) return;
 
@@ -692,7 +772,9 @@
             browseBy:        mode,
             filterValue:     filterSel.value,
             leagueId:        (mode === 'level') ? leagueSel.value : '',
-            linkType:        linkSel.value
+            linkType:        linkSel.value,
+            bgColor:         bgEnabledEl.checked ? bgColorEl.value : null,
+            bgOpacity:       parseInt(bgOpacityEl.value, 10)
         };
 
         websocket.send(JSON.stringify({ event: 'setSettings',  context: piUUID, payload: settings }));
@@ -738,6 +820,20 @@
         if (s.linkType) {
             document.getElementById('linkType').value = s.linkType;
         }
+
+        // Restore background color
+        var bgEnabled  = document.getElementById('bgEnabled');
+        var bgControls = document.getElementById('bgControls');
+        var bgColor    = document.getElementById('bgColorInput');
+        var bgOpacity  = document.getElementById('bgOpacityInput');
+        var bgOpacityLabel = document.getElementById('bgOpacityValue');
+        var opacityVal = s.bgOpacity != null ? s.bgOpacity : 100;
+
+        bgEnabled.checked = !!s.bgColor;
+        bgColor.value     = s.bgColor || '#000000';
+        bgOpacity.value   = opacityVal;
+        bgOpacityLabel.textContent = opacityVal + '%';
+        bgControls.classList.toggle('disabled', !bgEnabled.checked);
     }
 
     // ─── Toggle UI ────────────────────────────────────────────────────────────
@@ -777,6 +873,28 @@
     });
 
     document.getElementById('linkType').addEventListener('change', saveSettings);
+
+    // ── Background color controls ─────────────────────────────────────────────
+    var bgEnabledEl      = document.getElementById('bgEnabled');
+    var bgControlsEl     = document.getElementById('bgControls');
+    var bgColorInputEl   = document.getElementById('bgColorInput');
+    var bgOpacityInputEl = document.getElementById('bgOpacityInput');
+    var bgOpacityValueEl = document.getElementById('bgOpacityValue');
+
+    bgEnabledEl.addEventListener('change', function() {
+        bgControlsEl.classList.toggle('disabled', !bgEnabledEl.checked);
+        saveSettings();
+    });
+
+    bgColorInputEl.addEventListener('input', function() {
+        if (!bgEnabledEl.checked) return;
+        saveSettings();
+    });
+
+    bgOpacityInputEl.addEventListener('input', function() {
+        bgOpacityValueEl.textContent = bgOpacityInputEl.value + '%';
+        if (bgEnabledEl.checked) saveSettings();
+    });
 
     // ─── Stream Deck connection ───────────────────────────────────────────────
     function connectElgatoStreamDeckSocket(port, propertyInspectorUUID, registerEvent, info, actionInfo) {
