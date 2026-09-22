@@ -289,12 +289,12 @@ function handleEvent({ event, context, payload }) {
                     if (target && target.gamePk) {
                         const cfgLink = cfg && cfg.linkType;
                         let effectiveLink = cfgLink;
-                        if (cfgLink === 'tv' && target.state === 'final') {
+                        if ((cfgLink === 'tv' || cfgLink === 'custom') && target.state === 'final') {
                             const isActive = target === game;
                             const ft = isActive ? gameFinalAt.get(context) : null;
                             if (!ft || Date.now() - ft > 30 * 60 * 1000) effectiveLink = 'gameday';
                         }
-                        const url = buildGameUrl(target, effectiveLink, cfg && cfg.teamId);
+                        const url = buildGameUrl(target, effectiveLink, cfg && cfg.teamId, cfg && cfg.customUrl);
                         log('DH keyUp (single) — opening URL:', url);
                         ws.send(JSON.stringify({ event: 'openUrl', payload: { url } }));
                     } else {
@@ -309,11 +309,11 @@ function handleEvent({ event, context, payload }) {
                 if (game && game.gamePk) {
                     const cfgLink = cfg && cfg.linkType;
                     let effectiveLink = cfgLink;
-                    if (cfgLink === 'tv' && game.state === 'final') {
+                    if ((cfgLink === 'tv' || cfgLink === 'custom') && game.state === 'final') {
                         const ft = gameFinalAt.get(context);
                         if (!ft || Date.now() - ft > 30 * 60 * 1000) effectiveLink = 'gameday';
                     }
-                    const url = buildGameUrl(game, effectiveLink, cfg && cfg.teamId);
+                    const url = buildGameUrl(game, effectiveLink, cfg && cfg.teamId, cfg && cfg.customUrl);
                     log('keyUp — opening URL:', url);
                     ws.send(JSON.stringify({ event: 'openUrl', payload: { url } }));
                 } else {
@@ -536,7 +536,7 @@ const PARENT_ORG_COLOR = {
 };
 
 // ── URL building ──────────────────────────────────────────────────────────────
-function buildGameUrl(game, linkType, teamId) {
+function buildGameUrl(game, linkType, teamId, customUrl) {
     if (!game || !game.gamePk) return 'https://www.milb.com';
     // A postponed (or suspended, pending makeup) game often gets its gamePk reassigned to
     // a new date behind the scenes. MLB.com's Gameday redirects cleanly to the new page,
@@ -554,6 +554,7 @@ function buildGameUrl(game, linkType, teamId) {
                  : 'preview';
     const away = game.awaySlug || 'away';
     const home = game.homeSlug || 'home';
+    const gamedayUrl = `https://www.milb.com/gameday/${away}-vs-${home}/${game.gameDate}/${game.gamePk}/${suffix}`;
     if (linkType === 'tv') {
         // Only send to the live stream once the game has actually started (or is in Warmup,
         // which MiLB.tv already carries as pre-game coverage) — checking elapsed time against
@@ -561,11 +562,22 @@ function buildGameUrl(game, linkType, teamId) {
         // but the game (and stream) hasn't begun yet.
         const gameStarted = game.state === 'live' || game.state === 'delay-live' || game.state === 'final' || game.state === 'warmup';
         if (!gameStarted) {
-            return `https://www.milb.com/gameday/${away}-vs-${home}/${game.gameDate}/${game.gamePk}/${suffix}`;
+            return gamedayUrl;
         }
         return `https://www.milb.com/live-stream-games/g${game.gamePk}`;
     }
-    return `https://www.milb.com/gameday/${away}-vs-${home}/${game.gameDate}/${game.gamePk}/${suffix}`;
+    if (linkType === 'custom') {
+        // Same pattern as the MiLB.tv option: Gameday until the game actually starts (or is in
+        // Warmup), then the user's own link — e.g. a regional sports network's live-game page.
+        // Also falls back to Gameday if no URL has been configured yet, so the button never
+        // opens a blank tab.
+        const gameStarted = game.state === 'live' || game.state === 'delay-live' || game.state === 'final' || game.state === 'warmup';
+        if (!gameStarted || !customUrl) {
+            return gamedayUrl;
+        }
+        return customUrl;
+    }
+    return gamedayUrl;
 }
 
 // ── MLB Stats API ─────────────────────────────────────────────────────────────

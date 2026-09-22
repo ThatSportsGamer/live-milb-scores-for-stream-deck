@@ -335,7 +335,14 @@
     <select id="linkType">
         <option value="gameday">MiLB Gameday (free)</option>
         <option value="tv">MiLB.tv (subscription)</option>
+        <option value="custom">Custom Link</option>
     </select>
+</div>
+
+<div class="field-group" id="customUrlField" style="display:none;">
+    <label for="customUrlInput">Custom URL</label>
+    <input type="text" id="customUrlInput" placeholder="e.g. https://www.foxsports.com/live/your-rsn"/>
+    <div class="bg-hint">Opens MiLB Gameday until the game actually starts, then this URL instead — handy for a regional sports network's live-game page or any other link you'd rather use.</div>
 </div>
 
 <div class="field-group">
@@ -748,6 +755,16 @@
         return o;
     }
 
+    // Most people type "google.com" or "www.foxsports.com/..." without a scheme —
+    // the browser needs http(s):// or openUrl silently does nothing. Default to
+    // https:// rather than guessing http, since that's the safer/more common case.
+    function normalizeUrl(raw) {
+        var url = (raw || '').trim();
+        if (!url) return '';
+        if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url)) url = 'https://' + url;
+        return url;
+    }
+
     // ─── Settings: save ───────────────────────────────────────────────────────
     function saveSettings() {
         if (!websocket || !piUUID) return;
@@ -759,6 +776,7 @@
         var bgEnabledEl = document.getElementById('bgEnabled');
         var bgColorEl   = document.getElementById('bgColorInput');
         var bgOpacityEl = document.getElementById('bgOpacityInput');
+        var customUrlEl = document.getElementById('customUrlInput');
 
         if (!teamSel.value) return;
 
@@ -773,6 +791,7 @@
             filterValue:     filterSel.value,
             leagueId:        (mode === 'level') ? leagueSel.value : '',
             linkType:        linkSel.value,
+            customUrl:       normalizeUrl(customUrlEl.value),
             bgColor:         bgEnabledEl.checked ? bgColorEl.value : null,
             bgOpacity:       parseInt(bgOpacityEl.value, 10)
         };
@@ -820,6 +839,8 @@
         if (s.linkType) {
             document.getElementById('linkType').value = s.linkType;
         }
+        document.getElementById('customUrlInput').value = s.customUrl || '';
+        toggleCustomUrlField();
 
         // Restore background color
         var bgEnabled  = document.getElementById('bgEnabled');
@@ -872,7 +893,25 @@
         saveSettings();
     });
 
-    document.getElementById('linkType').addEventListener('change', saveSettings);
+    function toggleCustomUrlField() {
+        var linkSel = document.getElementById('linkType');
+        document.getElementById('customUrlField').style.display = (linkSel.value === 'custom') ? 'block' : 'none';
+    }
+
+    document.getElementById('linkType').addEventListener('change', function() {
+        toggleCustomUrlField();
+        saveSettings();
+    });
+
+    document.getElementById('customUrlInput').addEventListener('input', saveSettings);
+
+    // Rewrite the field to the normalized (scheme-prefixed) value once the user
+    // leaves it, so what they see matches what actually gets saved and opened —
+    // done on blur rather than every keystroke so it doesn't fight the cursor
+    // while typing.
+    document.getElementById('customUrlInput').addEventListener('blur', function() {
+        this.value = normalizeUrl(this.value);
+    });
 
     // ── Background color controls ─────────────────────────────────────────────
     var bgEnabledEl      = document.getElementById('bgEnabled');
