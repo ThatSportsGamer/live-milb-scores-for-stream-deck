@@ -1,6 +1,6 @@
 # Live MiLB Scores — Stream Deck Plugin
 
-![Live MiLB Scores in action](screenshots/LiveMiLBScoresThumbnail.png)
+![Live MiLB Scores in action](assets/LiveMiLBScoresThumbnail.png)
 
 A Stream Deck plugin that shows live Minor League Baseball scores directly on your keys. Each key tracks one team and updates automatically every 30 seconds.
 
@@ -24,7 +24,7 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 - **Next game on off days** — instead of a dead-end "No Game", the key shows your team's next scheduled matchup, date, and time
 - **Custom key background color** — pick your own background color and opacity instead of the default black
 
-![Custom key background colors](screenshots/LiveMiLBScoresCustomBackgroundColors.png)
+![Custom key background colors](assets/LiveMiLBScoresCustomBackgroundColors.png)
 *The Braves (left, Live MLB Scores) alongside four of their affiliates (Live MiLB Scores), each with its own custom key background color.*
 
 ---
@@ -164,11 +164,11 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 | High-A | Midwest League, Northwest League, South Atlantic League |
 | Single-A | California League, Carolina League, Florida State League |
 
-![Browse by League](screenshots/LiveMiLBScoresSettingsSelectByLeague.png)
+![Browse by League](assets/LiveMiLBScoresSettingsSelectByLeague.png)
 
 **Browse by MLB Organization** — pick an MLB parent club to see all of their affiliates grouped by level.
 
-![Browse by MLB Organization](screenshots/LiveMiLBScoresSettingsSelectByOrg.png)
+![Browse by MLB Organization](assets/LiveMiLBScoresSettingsSelectByOrg.png)
 
 3. Choose what happens when you press the key:
    - **MiLB Gameday (free)** — opens the game's Gameday page on MiLB.com
@@ -183,7 +183,7 @@ That's it. The key will load your team's game within a few seconds and refresh e
 
 ## What the Key Shows
 
-![Live score key](screenshots/LiveMiLBScoresButtonStates.png)
+![Live score key](assets/LiveMiLBScoresButtonStates.png)
 
 **Before the game:**
 ```
