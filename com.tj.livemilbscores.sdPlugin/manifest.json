@@ -1,14 +1,14 @@
 {
     "Author": "T.J. Lauerman aka ThatSportsGamer",
     "CodePath": "plugin.js",
-    "Description": "Shows live MiLB scores on your Stream Deck. Each key tracks one team \u2014 see the current score, inning, and game status at a glance.",
+    "Description": "Shows live MiLB scores on your Stream Deck. Each key tracks one team — see the current score, inning, and game status at a glance.",
     "Name": "Live MiLB Scores",
     "UUID": "com.tj.livemilbscores",
     "Category": "Live Sports Scores",
     "URL": "https://github.com/ThatSportsGamer/live-milb-scores-for-stream-deck",
     "Icon": "imgs/plugin-icon",
     "CategoryIcon": "imgs/category-icon",
-    "Version": "1.0.30.0",
+    "Version": "1.0.31.0",
     "SDKVersion": 3,
     "Software": {
         "MinimumVersion": "6.9"
@@ -25,7 +25,7 @@
     ],
     "Nodejs": {
         "Version": "20",
-        "Debug": "enabled"
+        "Debug": "disabled"
     },
     "Actions": [
         {

@@ -536,7 +536,21 @@ const PARENT_ORG_COLOR = {
 };
 
 // ── URL building ──────────────────────────────────────────────────────────────
+// Tidies a user-typed Custom Link: trims whitespace and adds https:// when no
+// scheme was typed ("www.foxsports.com/live/sny" -> "https://www.foxsports.com/live/sny"),
+// since Stream Deck won't open a bare domain as a web page. Returns '' for
+// anything that can't be a web link (blank, or a non-http scheme like file:),
+// so callers fall back to the default link instead of opening nothing.
+function normalizeCustomUrl(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    if (/^https?:\/\//i.test(s)) return s;
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s) || /^(javascript|data|file|vbscript|mailto):/i.test(s)) return '';
+    return 'https://' + s.replace(/^\/+/, '');
+}
+
 function buildGameUrl(game, linkType, teamId, customUrl) {
+    customUrl = normalizeCustomUrl(customUrl);
     if (!game || !game.gamePk) return 'https://www.milb.com';
     // A postponed (or suspended, pending makeup) game often gets its gamePk reassigned to
     // a new date behind the scenes. MLB.com's Gameday redirects cleanly to the new page,
