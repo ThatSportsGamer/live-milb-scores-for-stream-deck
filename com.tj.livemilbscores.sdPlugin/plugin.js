@@ -446,7 +446,7 @@ function buildLines(game, cfg) {
         if (game.gameLabel) return [game.matchup, game.time, game.gameLabel];
         return [game.matchup, game.time];
     }
-    if (game.state === 'ppd')     return [game.matchup, { text: 'PPD'   + gl, fs: 16,           color: '#E74C3C' }];
+    if (game.state === 'ppd')     return [game.matchup, { text: (game.canceled ? 'CANC' : 'PPD') + gl, fs: 16,           color: '#E74C3C' }];
     if (game.state === 'susp')    return [game.matchup, { text: 'SUSP'  + gl, fs: gl ? 14 : 16, color: '#E74C3C' }];
     if (game.state === 'delay')   return [game.matchup, game.time, { text: 'DELAY' + gl, fs: gl ? 11 : 13, color: '#3498DB' }];
     if (game.state === 'warmup')  return [game.matchup, game.time, { text: 'WARMUP' + gl, fs: gl ? 10 : 12, color: '#2ECC71' }];
@@ -488,7 +488,7 @@ function buildOtherLines(other) {
                 liveInnLine(other.outs, other.half + other.inn + (gl ? ' ' + gl : '')),
             ];
         case 'ppd':
-            return [{ text: gl, fs: 16, color: '#AAAAAA' }, { text: 'PPD',   fs: 16, color: '#E74C3C' }];
+            return [{ text: gl, fs: 16, color: '#AAAAAA' }, { text: other.canceled ? 'CANC' : 'PPD',   fs: 16, color: '#E74C3C' }];
         case 'susp':
             return [{ text: gl, fs: 16, color: '#AAAAAA' }, { text: 'SUSP',  fs: 14, color: '#E74C3C' }];
         case 'delay':
@@ -742,7 +742,9 @@ function parseSchedule(data) {
                 homeId:       og?.teams?.home?.team?.id,
                 awayId:       og?.teams?.away?.team?.id,
             };
-            if (ogDetail.startsWith('Postponed')) {
+            if (ogDetail.startsWith('Cancel')) {
+                otherGame = { ...ogBase, state: 'ppd', canceled: true };
+            } else if (ogDetail.startsWith('Postponed')) {
                 otherGame = { ...ogBase, state: 'ppd' };
             } else if (ogDetail.startsWith('Suspended')) {
                 otherGame = { ...ogBase, state: 'susp' };
@@ -800,6 +802,9 @@ function parseSchedule(data) {
         log('API:', status, detailed, matchup, 'pk=' + gamePk, gameLabel || '');
 
         // Special states — check detailedState first so they override abstractGameState
+        // A rainout MLB cancels outright comes back as abstractGameState 'Final' with
+        // detailedState 'Cancelled' — catch it before the Final branch turns it into a 0-0 final.
+        if (detailed.startsWith('Cancel'))            return { state: 'ppd',   canceled: true,   matchup, gamePk, gameDate, homeSlug, awaySlug, homeClubSlug, awayClubSlug, homeId, awayId, gameLabel, otherGame };
         if (detailed.startsWith('Postponed'))         return { state: 'ppd',   matchup, gamePk, gameDate, homeSlug, awaySlug, homeClubSlug, awayClubSlug, homeId, awayId, gameLabel, otherGame };
         if (detailed.startsWith('Suspended'))         return { state: 'susp',  matchup, gamePk, gameDate, homeSlug, awaySlug, homeClubSlug, awayClubSlug, homeId, awayId, gameLabel, otherGame };
         if (detailed.toLowerCase().includes('delay')) {
