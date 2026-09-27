@@ -446,7 +446,7 @@ function buildLines(game, cfg) {
         if (game.gameLabel) return [game.matchup, game.time, game.gameLabel];
         return [game.matchup, game.time];
     }
-    if (game.state === 'ppd')     return [game.matchup, { text: (game.canceled ? 'CANC' : 'PPD') + gl, fs: 16,           color: '#E74C3C' }];
+    if (game.state === 'ppd')     return [game.matchup, { text: (game.canceled ? 'CANC' : 'PPD') + gl, fs: (game.canceled && gl) ? 14 : 16, color: '#E74C3C' }];
     if (game.state === 'susp')    return [game.matchup, { text: 'SUSP'  + gl, fs: gl ? 14 : 16, color: '#E74C3C' }];
     if (game.state === 'delay')   return [game.matchup, game.time, { text: 'DELAY' + gl, fs: gl ? 11 : 13, color: '#3498DB' }];
     if (game.state === 'warmup')  return [game.matchup, game.time, { text: 'WARMUP' + gl, fs: gl ? 10 : 12, color: '#2ECC71' }];
