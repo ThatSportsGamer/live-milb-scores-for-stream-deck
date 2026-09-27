@@ -35,7 +35,7 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 - Rained-out games that the league cancels outright now show CANC instead of a 0-0 "Final" (doubleheaders included)
 
 **v1.0.31.0**
-- Added a high-resolution (@2x) plugin icon so it stays sharp on Retina/high-DPI displays
+- Added a high-resolution (2x) plugin icon so it stays sharp on Retina/high-DPI displays
 - Settings panel's Custom Link hint now mentions the link stays active for 30 minutes after the final out, then reverts to Gameday
 - Custom Link URLs are also tidied up by the plugin itself (spaces trimmed, https:// added if missing, non-web links ignored) — a backstop for links saved before the settings panel started doing this
 - Turned off Node debug mode for release builds
