@@ -380,8 +380,12 @@
     var allTeams   = [];
     var teamsReady = false;
 
-    var LEVEL_LABELS = { 11: 'Triple-A', 12: 'Double-A', 13: 'High-A', 14: 'Single-A' };
-    var LEVEL_ABBR   = { 11: 'AAA', 12: 'AA', 13: 'A+', 14: 'A' };
+    // 17 = MLB's "Winter Leagues" sport; we keep only the Arizona Fall League (league 119)
+    var LEVEL_LABELS = { 11: 'Triple-A', 12: 'Double-A', 13: 'High-A', 14: 'Single-A', 17: 'Arizona Fall League' };
+    var LEVEL_ABBR   = { 11: 'AAA', 12: 'AA', 13: 'A+', 14: 'A', 17: 'AFL' };
+    var AFL_SPORT_ID  = 17;
+    var LEVEL_ORDER   = { 11: 0, 12: 1, 13: 2, 14: 3, 17: 4 };
+    var AFL_LEAGUE_ID = 119;
 
     // 30 MLB parent orgs (sorted alphabetically, IDs are stable year-to-year)
     var MLB_ORGS = [
@@ -435,7 +439,7 @@
     // ─── Fetch teams from API ─────────────────────────────────────────────────
     function fetchTeams() {
         var year = new Date().getFullYear();
-        var url  = 'https://statsapi.mlb.com/api/v1/teams?sportIds=11,12,13,14&season=' + year;
+        var url  = 'https://statsapi.mlb.com/api/v1/teams?sportIds=11,12,13,14,17&season=' + year;
 
         fetch(url)
             .then(function(r) {
@@ -443,7 +447,12 @@
                 return r.json();
             })
             .then(function(data) {
-                allTeams = (data.teams || []).map(function(t) {
+                allTeams = (data.teams || []).filter(function(t) {
+                    // Sport 17 also holds the Caribbean winter leagues and the ABL — AFL only
+                    var sid = (t.sport && t.sport.id) || 0;
+                    return sid !== AFL_SPORT_ID || (t.league && t.league.id) === AFL_LEAGUE_ID;
+                }).map(function(t) {
+                    var isAFL = ((t.sport && t.sport.id) || 0) === AFL_SPORT_ID;
                     return {
                         id:           t.id,
                         abbr:         t.abbreviation   || '',
@@ -453,8 +462,10 @@
                         sportId:      (t.sport  && t.sport.id)   || 0,
                         leagueId:     (t.league && t.league.id)  || 0,
                         leagueName:   (t.league && t.league.name) || '',
-                        parentOrgId:  t.parentOrgId  || 0,
-                        parentOrgName: t.parentOrgName || ''
+                        // AFL clubs draw from several orgs; the API's parent is the
+                        // Commissioner's Office (11), so leave them out of org browsing/search
+                        parentOrgId:  isAFL ? 0  : (t.parentOrgId  || 0),
+                        parentOrgName: isAFL ? '' : (t.parentOrgName || '')
                     };
                 }).sort(function(a, b) { return a.name.localeCompare(b.name); });
 
@@ -498,6 +509,11 @@
                    t.teamName.toLowerCase().indexOf(q) !== -1 ||
                    t.abbr.toLowerCase().indexOf(q) !== -1 ||
                    t.parentOrgName.toLowerCase().indexOf(q) !== -1;
+        }).sort(function(a, b) {
+            // Highest level first (AAA, AA, A+, A, then AFL), alphabetical within a level
+            var la = LEVEL_ORDER[a.sportId], lb = LEVEL_ORDER[b.sportId];
+            if (la !== lb) return (la == null ? 99 : la) - (lb == null ? 99 : lb);
+            return a.name.localeCompare(b.name);
         }).slice(0, 40); // cap the list — 120 teams is a lot to render at once
     }
 
@@ -618,7 +634,8 @@
             lbl.textContent = 'Level';
             setLeagueRowVisible(true);
             addBlank(sel, '— Select a level —');
-            [11, 12, 13, 14].forEach(function(id) {
+            [11, 12, 13, 14, 17].forEach(function(id) {
+                if (id === AFL_SPORT_ID && !allTeams.some(function(t) { return t.sportId === id; })) return;
                 addOpt(sel, id, LEVEL_LABELS[id]);
             });
         } else {
@@ -643,6 +660,7 @@
         sel.innerHTML = '';
 
         if (!levelId || isNaN(fv)) {
+            setLeagueRowVisible(true);
             addBlank(sel, '— Select a level first —');
             sel.disabled = true;
             resetTeam('league');
@@ -662,8 +680,18 @@
 
         addBlank(sel, '— Select a league —');
         leagues.forEach(function(lg) { addOpt(sel, lg.id, lg.name); });
-
         sel.disabled = false;
+
+        // A level with only one league (the Arizona Fall League) skips the League
+        // step: pick it automatically, hide the row, and go straight to teams
+        if (leagues.length === 1) {
+            sel.value = leagues[0].id;
+            setLeagueRowVisible(false);
+            populateTeams(leagues[0].id, 'league');
+            return;
+        }
+
+        setLeagueRowVisible(true);
         resetTeam('league');
     }
 
@@ -672,6 +700,7 @@
         var teamSel = document.getElementById('teamSelect');
         var fv      = parseInt(filterValue, 10);
         teamSel.innerHTML = '';
+        updateStreamOptionLabel(); // list was just cleared, so no team is selected
 
         var placeholder = !filterValue
             ? (mode === 'league' ? '— Select a league first —' : '— Select an organization first —')
@@ -727,6 +756,7 @@
         var msg = (mode === 'league') ? '— Select a league first —' : '— Select an organization first —';
         addBlank(sel, msg);
         sel.disabled = true;
+        updateStreamOptionLabel();
     }
 
     // ─── Option builders ──────────────────────────────────────────────────────
@@ -766,7 +796,16 @@
     }
 
     // ─── Settings: save ───────────────────────────────────────────────────────
+    // The stream option is MiLB.tv for MiLB clubs, but AFL games stream free on MLB.com
+    function updateStreamOptionLabel() {
+        var teamId = parseInt(document.getElementById('teamSelect').value, 10);
+        var isAFL  = allTeams.some(function(t) { return t.id === teamId && t.sportId === AFL_SPORT_ID; });
+        document.querySelector('#linkType option[value="tv"]').textContent =
+            isAFL ? 'AFL Live Stream (free on MLB.com)' : 'MiLB.tv (subscription)';
+    }
+
     function saveSettings() {
+        updateStreamOptionLabel();
         if (!websocket || !piUUID) return;
         var mode      = getBrowseBy();
         var filterSel   = document.getElementById('filterSelect');
@@ -841,6 +880,7 @@
         }
         document.getElementById('customUrlInput').value = s.customUrl || '';
         toggleCustomUrlField();
+        updateStreamOptionLabel();
 
         // Restore background color
         var bgEnabled  = document.getElementById('bgEnabled');
