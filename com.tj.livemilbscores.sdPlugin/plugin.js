@@ -294,9 +294,7 @@ function handleEvent({ event, context, payload }) {
                             const ft = isActive ? gameFinalAt.get(context) : null;
                             if (!ft || Date.now() - ft > 30 * 60 * 1000) effectiveLink = 'gameday';
                         }
-                        const url = buildGameUrl(target, effectiveLink, cfg && cfg.teamId, cfg && cfg.customUrl);
-                        log('DH keyUp (single) — opening URL:', url);
-                        ws.send(JSON.stringify({ event: 'openUrl', payload: { url } }));
+                        openGameUrl(target, effectiveLink, cfg, 'DH keyUp (single)');
                     } else {
                         log('DH keyUp (single) — no game, refreshing');
                         lastRender.delete(context);
@@ -313,9 +311,7 @@ function handleEvent({ event, context, payload }) {
                         const ft = gameFinalAt.get(context);
                         if (!ft || Date.now() - ft > 30 * 60 * 1000) effectiveLink = 'gameday';
                     }
-                    const url = buildGameUrl(game, effectiveLink, cfg && cfg.teamId, cfg && cfg.customUrl);
-                    log('keyUp — opening URL:', url);
-                    ws.send(JSON.stringify({ event: 'openUrl', payload: { url } }));
+                    openGameUrl(game, effectiveLink, cfg, 'keyUp');
                 } else {
                     log('keyUp — no game, refreshing');
                     lastRender.delete(context);
@@ -595,6 +591,74 @@ function buildGameUrl(game, linkType, teamId, customUrl) {
         return customUrl;
     }
     return gamedayUrl;
+}
+
+// Opens the key's link. For an AFL game that has started, the stream option would
+// otherwise land on the league's live-streams hub — try to resolve that game's own
+// stream page first, and fall back to the hub if anything doesn't check out.
+async function openGameUrl(game, linkType, cfg, why) {
+    let url = buildGameUrl(game, linkType, cfg && cfg.teamId, cfg && cfg.customUrl);
+    if (url === AFL_STREAMS_URL) {
+        try { url = (await resolveAflStreamUrl(game)) || AFL_STREAMS_URL; }
+        catch (e) { log('AFL stream lookup failed:', e.message); url = AFL_STREAMS_URL; }
+    }
+    log(why + ' — opening URL:', url);
+    ws.send(JSON.stringify({ event: 'openUrl', payload: { url } }));
+}
+
+// ── AFL per-game streams ──────────────────────────────────────────────────────
+// Each AFL stream is an MLB.com video, /video/live-fall-league-<away>-<home>-<id>
+// (doubleheaders add -1/-2 before the id). The id is an arbitrary CMS number — not
+// the gamePk, and not in the Stats API — so we read it off the live-streams hub,
+// which lists only the current day's games as "video-player" slots (the archive is
+// separate). The video page's title carries the game date ("… | 10/03/2026"), which
+// we check so a stale slot for the same matchup can't send you to an old game.
+// Found links are cached per game; misses are retried after 2 minutes.
+const aflStreamCache = new Map();   // gamePk|label -> { url, at } (url null = miss)
+const AFL_MISS_RETRY_MS = 2 * 60 * 1000;
+
+function httpGetText(url, timeoutMs = 6000) {
+    return new Promise((resolve, reject) => {
+        const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (StreamDeckMiLBScores)' } }, res => {
+            if (res.statusCode !== 200) { res.resume(); return resolve(null); }
+            let body = '';
+            res.setEncoding('utf8');
+            res.on('data', c => body += c);
+            res.on('end', () => resolve(body));
+        });
+        req.on('error', reject);
+        req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error('timeout ' + url)); });
+    });
+}
+
+async function resolveAflStreamUrl(game) {
+    const [awayAbbr, homeAbbr] = String(game.matchup || '').split(' @ ');
+    if (!awayAbbr || !homeAbbr || !game.gamePk) return null;
+    const dh  = game.gameLabel === 'G1' ? '1' : game.gameLabel === 'G2' ? '2' : null;
+    const key = game.gamePk + '|' + (dh || '');
+    const hit = aflStreamCache.get(key);
+    if (hit && (hit.url || Date.now() - hit.at < AFL_MISS_RETRY_MS)) return hit.url;
+
+    let url = null;
+    const hub = await httpGetText(AFL_STREAMS_URL);
+    if (hub) {
+        const prefix = 'live-fall-league-' + awayAbbr.toLowerCase() + '-' + homeAbbr.toLowerCase() + '-';
+        const slugs  = [...hub.matchAll(/"type":"video-player","slug":"(live-fall-league-[a-z0-9-]+)"/g)]
+                           .map(m => m[1]).filter(sl => sl.startsWith(prefix));
+        const want   = dh ? new RegExp('^' + dh + '-\\d+$') : /^\d+$/;
+        const slug   = slugs.find(sl => want.test(sl.slice(prefix.length))) || slugs[0];
+        if (slug) {
+            const page  = await httpGetText('https://www.mlb.com/video/' + slug);   // null = not live yet (404)
+            const m     = page && page.match(/og:title" content="[^"]*\| (\d{2})\/(\d{2})\/(\d{4})"/);
+            const date  = m ? m[3] + '/' + m[1] + '/' + m[2] : null;               // -> YYYY/MM/DD
+            if (date === game.gameDate) url = 'https://www.mlb.com/video/' + slug;
+            else log('AFL stream:', slug, 'date', date, '!= game', game.gameDate);
+        } else {
+            log('AFL stream: no hub slot for', prefix);
+        }
+    }
+    aflStreamCache.set(key, { url, at: Date.now() });
+    return url;
 }
 
 // ── MLB Stats API ─────────────────────────────────────────────────────────────

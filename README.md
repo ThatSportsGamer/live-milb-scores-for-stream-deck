@@ -4,7 +4,7 @@
 
 A Stream Deck plugin that shows live Minor League Baseball scores directly on your keys. Each key tracks one team and updates automatically every 30 seconds.
 
-![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.33-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-milb-scores-c8a87c49-0980-4d7a-b8a4-b93334414733)
+![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.34-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-milb-scores-c8a87c49-0980-4d7a-b8a4-b93334414733)
 
 ---
 
@@ -30,6 +30,9 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 ---
 
 ## Recent Updates
+
+**v1.0.34.0**
+- Arizona Fall League keys set to "AFL Live Stream" now open that game's own stream on MLB.com once it starts, instead of the league's live-streams page. If the game's stream isn't posted yet (or can't be found), the key falls back to the live-streams page
 
 **v1.0.33.0**
 - Added the Arizona Fall League — follow any of its six clubs (Desert Dogs, Javelinas, Rafters, Saguaros, Scorpions, Solar Sox), playoffs and Championship Game included. Find them by search or under Level → Arizona Fall League
@@ -196,7 +199,7 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 3. Choose what happens when you press the key:
    - **MiLB Gameday (free)** — opens the game's Gameday page on MiLB.com
    - **MiLB.tv (subscription)** — opens the live stream page on MiLB.com
-     (for Arizona Fall League teams this option reads **AFL Live Stream (free on MLB.com)** and opens MLB.com's AFL live-streams page)
+     (for Arizona Fall League teams this option reads **AFL Live Stream (free on MLB.com)** and opens that game's free stream on MLB.com, or the AFL live-streams page if the stream isn't up yet)
    - **Custom Link** — opens any URL you enter, such as your regional sports network's live-game page
 
 That's it. The key will load your team's game within a few seconds and refresh every 30 seconds from there.
