@@ -4,14 +4,14 @@
 
 A Stream Deck plugin that shows live Minor League Baseball scores directly on your keys. Each key tracks one team and updates automatically every 30 seconds.
 
-![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.35-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-milb-scores-c8a87c49-0980-4d7a-b8a4-b93334414733)
+![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.36-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-milb-scores-c8a87c49-0980-4d7a-b8a4-b93334414733)
 
 ---
 
 ## Features
 
 - **Live scores** — shows away score, home score, and current inning while a game is in progress
-- **Pre-game** — shows the matchup (e.g. `CLT @ JAX`) and scheduled start time
+- **Pre-game** — the two teams stacked (`CLT` over `@ JAX`) and the start time; on off days, your team's next game with its day and time
 - **Final scores** — shows the final score with a "Final" label
 - **Score-change flash** — when your team scores, the key blinks in its MLB parent organization's color (gray when the opponent scores), then shows a short card with the scoring team and how many runs scored (e.g. SWB / +2 RUNS)
 - **Browser shortcut** — press any key to open that game on MiLB Gameday, MiLB.tv, or a custom link of your choice (e.g. your regional sports network); switches to Gameday automatically 30 minutes after the final out
@@ -21,7 +21,7 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 - **Multi-key support** — add as many team keys as you want, each refreshes independently
 - **Always up-to-date team list** — teams are loaded live from the MiLB API, so affiliate changes between seasons are reflected automatically
 - **Search** — type a team, city, or mascot name to jump straight to it instead of drilling through League/Organization dropdowns
-- **Next game on off days** — instead of a dead-end "No Game", the key shows your team's next scheduled matchup, date, and time
+- **Next game on off days** — instead of a dead-end "No Game", the key shows your team's next scheduled game with its day and time
 - **Custom key background color** — pick your own background color and opacity instead of the default black
 
 ![Custom key background colors](assets/LiveMiLBScoresCustomBackgroundColors.png)
@@ -31,6 +31,12 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 
 ## Recent Updates
 
+**v1.0.36.0**
+- Pregame keys match the NFL, CFB, NHL and NBA plugins: the teams stack on two lines (away team on top, "@ home" below, with a small "@"), then the start time. On game day it's just the teams and the time; for a later day the day gets its own gray line above the time
+- Off-day keys show your team's next game the same way: the "Next Game" label is gone, and the day line reads the weekday ("Thursday"), or the date when it's a week or more away
+- Doubleheaders put the game number on the day line ("Game 2")
+- Postponed, canceled, suspended, delayed and warmup keys use the same stacked teams
+
 **v1.0.35.0**
 - Score flash is now 5 solid blinks of the scoring color with no text, so it reads at a glance even on light team colors
 - New: right after the flash, a 3-second card shows the scoring team and how many runs scored (e.g. ATL / +2 RUNS), then the score returns
@@ -38,13 +44,6 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 
 **v1.0.34.0**
 - Arizona Fall League keys set to "AFL Live Stream" now open that game's own stream on MLB.com once it starts, instead of the league's live-streams page. If the game's stream isn't posted yet (or can't be found), the key falls back to the live-streams page
-
-**v1.0.33.0**
-- Added the Arizona Fall League — follow any of its six clubs (Desert Dogs, Javelinas, Rafters, Saguaros, Scorpions, Solar Sox), playoffs and Championship Game included. Find them by search or under Level → Arizona Fall League
-- AFL clubs draw players from several MLB organizations, so they don't appear under Browse by MLB Organization
-- For AFL teams the stream option becomes "AFL Live Stream (free on MLB.com)" and opens MLB.com's AFL live-streams page (AFL games aren't on MiLB.tv)
-- Picking a level with only one league (the AFL) now skips the League dropdown
-- Search results are now ordered by level — Triple-A, Double-A, High-A, Single-A, then AFL — instead of alphabetically, so searching "Braves" lists Gwinnett → Columbus → Rome → Augusta
 
 Older updates: see the full version history in [CHANGELOG.md](CHANGELOG.md).
 
@@ -112,8 +111,9 @@ That's it. The key will load your team's game within a few seconds and refresh e
 
 **Before the game:**
 ```
-CLT @ JAX
- 7:05 PM
+CLT
+@ JAX
+7:05 PM
 ```
 
 **Live game:**
@@ -130,11 +130,12 @@ JAX 1
 Final
 ```
 
-**Off day:**
+**Off day** (your team's next game — the weekday, or the date when it's a week or more away):
 ```
-Next Game
-CLT @ JAX
-7/25 7:05 PM
+CLT
+@ JAX
+Thursday
+7:05 PM
 ```
 
 ---

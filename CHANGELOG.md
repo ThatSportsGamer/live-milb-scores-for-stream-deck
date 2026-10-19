@@ -2,6 +2,12 @@
 
 Full version history for Live MiLB Scores, newest first. The [README](README.md) lists the three most recent updates.
 
+**v1.0.36.0**
+- Pregame keys match the NFL, CFB, NHL and NBA plugins: the teams stack on two lines (away team on top, "@ home" below, with a small "@"), then the start time. On game day it's just the teams and the time; for a later day the day gets its own gray line above the time
+- Off-day keys show your team's next game the same way: the "Next Game" label is gone, and the day line reads the weekday ("Thursday"), or the date when it's a week or more away
+- Doubleheaders put the game number on the day line ("Game 2")
+- Postponed, canceled, suspended, delayed and warmup keys use the same stacked teams
+
 **v1.0.35.0**
 - Score flash is now 5 solid blinks of the scoring color with no text, so it reads at a glance even on light team colors
 - New: right after the flash, a 3-second card shows the scoring team and how many runs scored (e.g. ATL / +2 RUNS), then the score returns
