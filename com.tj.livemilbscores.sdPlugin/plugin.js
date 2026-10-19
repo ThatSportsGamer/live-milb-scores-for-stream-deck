@@ -547,6 +547,17 @@ function normalizeCustomUrl(raw) {
 function buildGameUrl(game, linkType, teamId, customUrl) {
     customUrl = normalizeCustomUrl(customUrl);
     if (!game || !game.gamePk) return 'https://www.milb.com';
+    // Winter leagues: MLB.com Gameday for everything (it also follows a postponed
+    // game's reassigned gamePk), MLB.TV for the stream option once the game starts
+    if (game.isWinter) {
+        const mlbGameday = `https://www.mlb.com/gameday/${game.gamePk}`;
+        const started = game.state === 'live' || game.state === 'delay-live' || game.state === 'final' || game.state === 'warmup';
+        // MLB.TV's /tv/g<gamePk> player says "not available" for winter games; their streams
+        // are featured MLB.TV videos — openGameUrl resolves this to the game's own video
+        if (linkType === 'tv' && started && !NO_STREAM_LEAGUE_IDS.includes(game.isWinter)) return WINTER_STREAMS_URL;
+        if (linkType === 'custom' && started && customUrl) return customUrl;
+        return mlbGameday;
+    }
     // A postponed (or suspended, pending makeup) game often gets its gamePk reassigned to
     // a new date behind the scenes. MLB.com's Gameday redirects cleanly to the new page,
     // but MiLB.com's site gets stuck in a redirect loop trying to resolve the old link —
@@ -600,6 +611,10 @@ async function openGameUrl(game, linkType, cfg, why) {
     if (url === AFL_STREAMS_URL) {
         try { url = (await resolveAflStreamUrl(game)) || AFL_STREAMS_URL; }
         catch (e) { log('AFL stream lookup failed:', e.message); url = AFL_STREAMS_URL; }
+    }
+    if (url === WINTER_STREAMS_URL) {
+        try { url = (await resolveWinterStreamUrl(game)) || WINTER_STREAMS_URL; }
+        catch (e) { log('Winter stream lookup failed:', e.message); url = WINTER_STREAMS_URL; }
     }
     log(why + ' — opening URL:', url);
     ws.send(JSON.stringify({ event: 'openUrl', payload: { url } }));
@@ -660,9 +675,45 @@ async function resolveAflStreamUrl(game) {
     return url;
 }
 
+// ── Winter league per-game streams (LMP / LIDOM on MLB.TV) ────────────────────
+// Each stream is an MLB.TV video, /tv/shows/p/mlbtv-featured-svod-video-list/s/<slug>
+// (e.g. lmp-live-charros-vs-jaguares-250900). The slug's number is a CMS id and the
+// names aren't consistent, but MLB's CMS feed behind that list tags every video with
+// its game ("gamepk-850558"), so we match on the gamePk. The feed (~90 KB, newest
+// first) is only fetched on a stream press for a game that has started. Hits are
+// cached per game; misses are retried after 2 minutes; any failure → the list page.
+const WINTER_STREAMS_FEED = 'https://dapi.cms.mlbinfra.com/v2/content/en-us/sel-mlbtv-featured-svod-video-list';
+const winterStreamCache   = new Map();   // gamePk -> { url, at } (url null = miss)
+
+async function resolveWinterStreamUrl(game) {
+    if (!game.gamePk) return null;
+    const hit = winterStreamCache.get(game.gamePk);
+    if (hit && (hit.url || Date.now() - hit.at < AFL_MISS_RETRY_MS)) return hit.url;
+    let url = null;
+    const body = await httpGetText(WINTER_STREAMS_FEED);
+    if (body) {
+        const want = 'gamepk-' + game.gamePk;
+        const item = (JSON.parse(body).items || []).find(it => (it.tags || []).some(t => t.slug === want));
+        if (item && item.slug) url = 'https://www.mlb.com/tv/shows/p/mlbtv-featured-svod-video-list/s/' + item.slug;
+        else log('Winter stream: no video tagged', want);
+    }
+    winterStreamCache.set(game.gamePk, { url, at: Date.now() });
+    return url;
+}
+
 // ── MLB Stats API ─────────────────────────────────────────────────────────────
 const SPORT_IDS   = '11,12,13,14,17';
 const AFL_LEAGUE_ID = 119;
+// Caribbean / Mexican winter leagues, also in sport 17 (added 1.0.37.0):
+// 131 Dominican (LIDOM), 132 Mexican Pacific (LMP), 135 Venezuela (LVBP).
+// MLB.com Gameday covers their games (/gameday/<gamePk> redirects to the full page);
+// LMP and LIDOM stream on MLB.TV as featured videos (see WINTER_STREAMS_URL). No MiLB.com pages, no parent orgs.
+const WINTER_LEAGUE_IDS = [131, 132, 135];
+// isWinter holds the league id (truthy) so links can tell the leagues apart
+const isWinterLeague = id => WINTER_LEAGUE_IDS.includes(id) ? id : false;
+// Leagues with no MLB.TV stream (Venezuela) — the stream option opens Gameday instead
+const NO_STREAM_LEAGUE_IDS = [135];
+const WINTER_STREAMS_URL = 'https://www.mlb.com/tv/shows/mlbtv-featured-svod-video-list';
 const AFL_SCHEDULE_URL = 'https://www.mlb.com/arizona-fall-league/schedule';
 // AFL games stream free on MLB.com, not MiLB.tv. Each stream is a CMS video
 // (e.g. /video/live-fall-league-gdd-mss-193557) whose ID isn't tied to the gamePk
@@ -677,8 +728,8 @@ function fetchTodayGame(teamId) {
                      String(now.getMonth() + 1).padStart(2, '0') + '-' +
                      String(now.getDate()).padStart(2, '0');
         // sportId=11,12,13,14 covers Triple-A, Double-A, High-A, Single-A; 17 adds the
-        // Arizona Fall League (sport 17 is all winter leagues, but we query by teamId, so
-        // only the tracked AFL club comes back)
+        // Arizona Fall League and the Mexican / Venezuelan / Dominican winter leagues
+        // (sport 17 is all winter leagues; we query by teamId, so only the tracked club comes back)
         const url = 'https://statsapi.mlb.com/api/v1/schedule' +
                     '?sportId=' + SPORT_IDS + '&date=' + date +
                     '&teamId=' + teamId +
@@ -742,6 +793,7 @@ function fetchNextGame(teamId, afterDate) {
                             const time = startTBD ? 'TBD' : fmtTime(startISO);
                             return resolve({
                                 state: 'nextgame', matchup, startISO, time, gamePk: g.gamePk, gameDate,
+                                isWinter: isWinterLeague(g?.teams?.home?.team?.league?.id),
                                 homeSlug: toSlug(homeName), awaySlug: toSlug(awayName),
                             });
                         }
@@ -814,6 +866,7 @@ function parseSchedule(data) {
                 homeId:       og?.teams?.home?.team?.id,
                 awayId:       og?.teams?.away?.team?.id,
                 isAFL:        og?.teams?.home?.team?.league?.id === AFL_LEAGUE_ID,
+                isWinter:     isWinterLeague(og?.teams?.home?.team?.league?.id),
             };
             if (ogDetail.startsWith('Cancel')) {
                 otherGame = { ...ogBase, state: 'ppd', canceled: true };
@@ -872,15 +925,16 @@ function parseSchedule(data) {
         const ls          = g.linescore;
         const startTBD    = g.status?.startTimeTBD || false;
         const isAFL       = g?.teams?.home?.team?.league?.id === AFL_LEAGUE_ID;
+        const isWinter    = isWinterLeague(g?.teams?.home?.team?.league?.id);
 
         log('API:', status, detailed, matchup, 'pk=' + gamePk, gameLabel || '');
 
         // Special states — check detailedState first so they override abstractGameState
         // A rainout MLB cancels outright comes back as abstractGameState 'Final' with
         // detailedState 'Cancelled' — catch it before the Final branch turns it into a 0-0 final.
-        if (detailed.startsWith('Cancel'))            return { state: 'ppd',   canceled: true,   matchup, gamePk, gameDate, homeSlug, awaySlug, homeClubSlug, awayClubSlug, homeId, awayId, isAFL, gameLabel, otherGame };
-        if (detailed.startsWith('Postponed'))         return { state: 'ppd',   matchup, gamePk, gameDate, homeSlug, awaySlug, homeClubSlug, awayClubSlug, homeId, awayId, isAFL, gameLabel, otherGame };
-        if (detailed.startsWith('Suspended'))         return { state: 'susp',  matchup, gamePk, gameDate, homeSlug, awaySlug, homeClubSlug, awayClubSlug, homeId, awayId, isAFL, gameLabel, otherGame };
+        if (detailed.startsWith('Cancel'))            return { state: 'ppd',   canceled: true,   matchup, gamePk, gameDate, homeSlug, awaySlug, homeClubSlug, awayClubSlug, homeId, awayId, isAFL, isWinter, gameLabel, otherGame };
+        if (detailed.startsWith('Postponed'))         return { state: 'ppd',   matchup, gamePk, gameDate, homeSlug, awaySlug, homeClubSlug, awayClubSlug, homeId, awayId, isAFL, isWinter, gameLabel, otherGame };
+        if (detailed.startsWith('Suspended'))         return { state: 'susp',  matchup, gamePk, gameDate, homeSlug, awaySlug, homeClubSlug, awayClubSlug, homeId, awayId, isAFL, isWinter, gameLabel, otherGame };
         if (detailed.toLowerCase().includes('delay')) {
             // Distinguish a pre-game delay (e.g. "Delayed Start", status still "Preview")
             // from a mid-game delay (status "Live"). MLB's linescore pre-populates a "Top 1"
@@ -890,42 +944,42 @@ function parseSchedule(data) {
             if (status === 'Live') {
                 const homeRuns = ls?.teams?.home?.runs ?? 0;
                 const awayRuns = ls?.teams?.away?.runs ?? 0;
-                return { state: 'delay-live', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, isAFL, gameLabel, otherGame };
+                return { state: 'delay-live', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, isAFL, isWinter, gameLabel, otherGame };
             }
-            return { state: 'delay', matchup, time: startTBD ? 'TBD' : fmtTime(g.gameDate), startISO: g.gameDate || null, gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, isAFL, gameLabel, otherGame };
+            return { state: 'delay', matchup, time: startTBD ? 'TBD' : fmtTime(g.gameDate), startISO: g.gameDate || null, gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, isAFL, isWinter, gameLabel, otherGame };
         }
 
         if (status === 'Preview') {
             const time = startTBD ? 'TBD' : fmtTime(g.gameDate);
-            return { state: 'preview', matchup, time, startISO: g.gameDate || null, gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, homeName, awayName, homeParentOrgId, awayParentOrgId, isAFL, gameLabel, otherGame };
+            return { state: 'preview', matchup, time, startISO: g.gameDate || null, gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, homeName, awayName, homeParentOrgId, awayParentOrgId, isAFL, isWinter, gameLabel, otherGame };
         }
 
         // The API flips abstractGameState to "Live" during pre-game warmups before first pitch.
         // Keep showing the start time until play actually begins.
         if (detailed === 'Pre-Game') {
             const time = startTBD ? 'TBD' : fmtTime(g.gameDate);
-            return { state: 'preview', matchup, time, startISO: g.gameDate || null, gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, homeName, awayName, homeParentOrgId, awayParentOrgId, isAFL, gameLabel, otherGame };
+            return { state: 'preview', matchup, time, startISO: g.gameDate || null, gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, homeName, awayName, homeParentOrgId, awayParentOrgId, isAFL, isWinter, gameLabel, otherGame };
         }
         // Warmup means the game (possibly just coming out of a rain delay) is about to start —
         // the original scheduled time is stale at this point, so label it explicitly instead
         // of showing a clock that's already passed.
         if (detailed === 'Warmup') {
             const time = startTBD ? 'TBD' : fmtTime(g.gameDate);
-            return { state: 'warmup', matchup, time, startISO: g.gameDate || null, gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, homeName, awayName, homeParentOrgId, awayParentOrgId, isAFL, gameLabel, otherGame };
+            return { state: 'warmup', matchup, time, startISO: g.gameDate || null, gamePk, gameDate, homeSlug, awaySlug, homeId, awayId, homeName, awayName, homeParentOrgId, awayParentOrgId, isAFL, isWinter, gameLabel, otherGame };
         }
 
         const homeRuns = ls?.teams?.home?.runs ?? 0;
         const awayRuns = ls?.teams?.away?.runs ?? 0;
 
         if (status === 'Final') {
-            return { state: 'final', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, isAFL, gameLabel, otherGame };
+            return { state: 'final', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, isAFL, isWinter, gameLabel, otherGame };
         }
 
         // Live
         const inn  = ls?.currentInning || '?';
         const half = ls?.inningHalf === 'Top' ? '\u25b2' : '\u25bc';
 
-        return { state: 'live', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, inn, half, outs: ls?.outs ?? 0, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, isAFL, gameLabel, otherGame };
+        return { state: 'live', matchup, homeAbbr, awayAbbr, homeSlug, awaySlug, homeId, awayId, homeRuns, awayRuns, inn, half, outs: ls?.outs ?? 0, gamePk, gameDate, homeName, awayName, homeParentOrgId, awayParentOrgId, isAFL, isWinter, gameLabel, otherGame };
 
     } catch (e) {
         log('parseSchedule error:', e.message);

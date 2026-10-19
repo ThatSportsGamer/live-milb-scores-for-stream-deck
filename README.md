@@ -4,7 +4,7 @@
 
 A Stream Deck plugin that shows live Minor League Baseball scores directly on your keys. Each key tracks one team and updates automatically every 30 seconds.
 
-![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.36-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-milb-scores-c8a87c49-0980-4d7a-b8a4-b93334414733)
+![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.37-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-milb-scores-c8a87c49-0980-4d7a-b8a4-b93334414733)
 
 ---
 
@@ -31,6 +31,10 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 
 ## Recent Updates
 
+**v1.0.37.0**
+- New: winter leagues — follow any team in the Mexican Pacific League (LMP), the Venezuelan league (LVBP) or the Dominican league (LIDOM). Pick Winter Leagues in the Level dropdown, or just search a team (e.g. Culiacan, Leones). Live scores, run cards and fireworks work the same as the AFL
+- Winter league keys open the game on MLB.com Gameday; the stream option opens the game's own MLB.TV stream once it starts (LMP and LIDOM games; if the stream can't be found, MLB.TV's featured games list). Venezuelan games aren't on MLB.TV, so for those teams the stream option is greyed out with a note, and the key opens Gameday (Custom Link still works)
+
 **v1.0.36.0**
 - Pregame keys match the NFL, CFB, NHL and NBA plugins: the teams stack on two lines (away team on top, "@ home" below, with a small "@"), then the start time. On game day it's just the teams and the time; for a later day the day gets its own gray line above the time
 - Off-day keys show your team's next game the same way: the "Next Game" label is gone, and the day line reads the weekday ("Thursday"), or the date when it's a week or more away
@@ -41,9 +45,6 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 - Score flash is now 5 solid blinks of the scoring color with no text, so it reads at a glance even on light team colors
 - New: right after the flash, a 3-second card shows the scoring team and how many runs scored (e.g. ATL / +2 RUNS), then the score returns
 - Settings help text now says "key" instead of "button"
-
-**v1.0.34.0**
-- Arizona Fall League keys set to "AFL Live Stream" now open that game's own stream on MLB.com once it starts, instead of the league's live-streams page. If the game's stream isn't posted yet (or can't be found), the key falls back to the live-streams page
 
 Older updates: see the full version history in [CHANGELOG.md](CHANGELOG.md).
 

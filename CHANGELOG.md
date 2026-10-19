@@ -2,6 +2,10 @@
 
 Full version history for Live MiLB Scores, newest first. The [README](README.md) lists the three most recent updates.
 
+**v1.0.37.0**
+- New: winter leagues — follow any team in the Mexican Pacific League (LMP), the Venezuelan league (LVBP) or the Dominican league (LIDOM). Pick Winter Leagues in the Level dropdown, or just search a team (e.g. Culiacan, Leones). Live scores, run cards and fireworks work the same as the AFL
+- Winter league keys open the game on MLB.com Gameday; the stream option opens the game's own MLB.TV stream once it starts (LMP and LIDOM games; if the stream can't be found, MLB.TV's featured games list). Venezuelan games aren't on MLB.TV, so for those teams the stream option is greyed out with a note, and the key opens Gameday (Custom Link still works)
+
 **v1.0.36.0**
 - Pregame keys match the NFL, CFB, NHL and NBA plugins: the teams stack on two lines (away team on top, "@ home" below, with a small "@"), then the start time. On game day it's just the teams and the time; for a later day the day gets its own gray line above the time
 - Off-day keys show your team's next game the same way: the "Next Game" label is gone, and the day line reads the weekday ("Thursday"), or the date when it's a week or more away

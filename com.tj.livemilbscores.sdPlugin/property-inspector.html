@@ -337,6 +337,7 @@
         <option value="tv">MiLB.tv (subscription)</option>
         <option value="custom">Custom Link</option>
     </select>
+    <div id="streamHint" style="display:none;font-size:11px;color:#888;line-height:1.5;margin-top:6px;"></div>
 </div>
 
 <div class="field-group" id="customUrlField" style="display:none;">
@@ -380,12 +381,19 @@
     var allTeams   = [];
     var teamsReady = false;
 
-    // 17 = MLB's "Winter Leagues" sport; we keep only the Arizona Fall League (league 119)
-    var LEVEL_LABELS = { 11: 'Triple-A', 12: 'Double-A', 13: 'High-A', 14: 'Single-A', 17: 'Arizona Fall League' };
-    var LEVEL_ABBR   = { 11: 'AAA', 12: 'AA', 13: 'A+', 14: 'A', 17: 'AFL' };
+    // 17 = MLB's "Winter Leagues" sport: the Arizona Fall League (league 119) keeps
+    // level 17; the Mexican / Venezuelan / Dominican winter leagues share a made-up
+    // level 99 ("Winter Leagues") so they get their own spot in the Level dropdown.
+    var WINTER_LEVEL  = 99;
+    var LEVEL_LABELS = { 11: 'Triple-A', 12: 'Double-A', 13: 'High-A', 14: 'Single-A', 17: 'Arizona Fall League', 99: 'Winter Leagues (Mexico, Venezuela, Dominican Rep.)' };
+    var LEVEL_ABBR   = { 11: 'AAA', 12: 'AA', 13: 'A+', 14: 'A', 17: 'AFL', 99: 'WIN' };
     var AFL_SPORT_ID  = 17;
-    var LEVEL_ORDER   = { 11: 0, 12: 1, 13: 2, 14: 3, 17: 4 };
+    var LEVEL_ORDER   = { 11: 0, 12: 1, 13: 2, 14: 3, 17: 4, 99: 5 };
     var AFL_LEAGUE_ID = 119;
+    // 132 Mexican Pacific, 135 Venezuela, 131 Dominican — short tags for search results
+    var WINTER_LEAGUES = { 132: 'LMP', 135: 'LVBP', 131: 'LIDOM' };
+    // Leagues whose games aren't streamed on MLB.TV — the stream option is greyed out with this note
+    var NO_STREAM_LEAGUES = { 135: "Venezuelan league games aren't streamed on MLB.TV, so the key opens the game on MLB Gameday." };
 
     // 30 MLB parent orgs (sorted alphabetically, IDs are stable year-to-year)
     var MLB_ORGS = [
@@ -448,18 +456,20 @@
             })
             .then(function(data) {
                 allTeams = (data.teams || []).filter(function(t) {
-                    // Sport 17 also holds the Caribbean winter leagues and the ABL — AFL only
+                    // Sport 17 also holds Puerto Rico and the ABL — keep the AFL and the three winter leagues
                     var sid = (t.sport && t.sport.id) || 0;
-                    return sid !== AFL_SPORT_ID || (t.league && t.league.id) === AFL_LEAGUE_ID;
+                    var lid = (t.league && t.league.id) || 0;
+                    return sid !== AFL_SPORT_ID || lid === AFL_LEAGUE_ID || !!WINTER_LEAGUES[lid];
                 }).map(function(t) {
-                    var isAFL = ((t.sport && t.sport.id) || 0) === AFL_SPORT_ID;
+                    var isAFL = ((t.sport && t.sport.id) || 0) === AFL_SPORT_ID;   // AFL + winter leagues: no MLB parent
+                    var isWinter = isAFL && !!WINTER_LEAGUES[(t.league && t.league.id) || 0];
                     return {
                         id:           t.id,
                         abbr:         t.abbreviation   || '',
                         name:         t.name           || '',
                         teamName:     t.teamName       || '',
                         slug:         toSlug(t.teamName || t.name),
-                        sportId:      (t.sport  && t.sport.id)   || 0,
+                        sportId:      isWinter ? WINTER_LEVEL : ((t.sport && t.sport.id) || 0),
                         leagueId:     (t.league && t.league.id)  || 0,
                         leagueName:   (t.league && t.league.name) || '',
                         // AFL clubs draw from several orgs; the API's parent is the
@@ -537,7 +547,7 @@
 
             var levelSpan = document.createElement('span');
             levelSpan.className = 'ac-level';
-            levelSpan.textContent = (LEVEL_ABBR[t.sportId] || '') + (MLB_ORG_ABBR[t.parentOrgId] ? ' · ' + MLB_ORG_ABBR[t.parentOrgId] : '');
+            levelSpan.textContent = (t.sportId === WINTER_LEVEL ? (WINTER_LEAGUES[t.leagueId] || 'WIN') : (LEVEL_ABBR[t.sportId] || '')) + (MLB_ORG_ABBR[t.parentOrgId] ? ' · ' + MLB_ORG_ABBR[t.parentOrgId] : '');
             div.appendChild(levelSpan);
 
             div.addEventListener('mousedown', function(e) {
@@ -634,8 +644,8 @@
             lbl.textContent = 'Level';
             setLeagueRowVisible(true);
             addBlank(sel, '— Select a level —');
-            [11, 12, 13, 14, 17].forEach(function(id) {
-                if (id === AFL_SPORT_ID && !allTeams.some(function(t) { return t.sportId === id; })) return;
+            [11, 12, 13, 14, 17, 99].forEach(function(id) {
+                if ((id === AFL_SPORT_ID || id === WINTER_LEVEL) && !allTeams.some(function(t) { return t.sportId === id; })) return;
                 addOpt(sel, id, LEVEL_LABELS[id]);
             });
         } else {
@@ -679,7 +689,8 @@
         leagues.sort(function(a, b) { return a.name.localeCompare(b.name); });
 
         addBlank(sel, '— Select a league —');
-        leagues.forEach(function(lg) { addOpt(sel, lg.id, lg.name); });
+        // Winter leagues get their short name too: "Liga Mexicana del Pacifico (LMP)"
+        leagues.forEach(function(lg) { addOpt(sel, lg.id, lg.name + (WINTER_LEAGUES[lg.id] ? ' (' + WINTER_LEAGUES[lg.id] + ')' : '')); });
         sel.disabled = false;
 
         // A level with only one league (the Arizona Fall League) skips the League
@@ -800,8 +811,18 @@
     function updateStreamOptionLabel() {
         var teamId = parseInt(document.getElementById('teamSelect').value, 10);
         var isAFL  = allTeams.some(function(t) { return t.id === teamId && t.sportId === AFL_SPORT_ID; });
-        document.querySelector('#linkType option[value="tv"]').textContent =
-            isAFL ? 'AFL Live Stream (free on MLB.com)' : 'MiLB.tv (subscription)';
+        var win    = allTeams.filter(function(t) { return t.id === teamId && t.sportId === WINTER_LEVEL; })[0];
+        var isWin  = !!win;
+        var noStream = isWin && !!NO_STREAM_LEAGUES[win.leagueId];
+        var tvOpt  = document.querySelector('#linkType option[value="tv"]');
+        var hint   = document.getElementById('streamHint');
+        document.querySelector('#linkType option[value="gameday"]').textContent = isWin ? 'MLB Gameday (free)' : 'MiLB Gameday (free)';
+        tvOpt.textContent = noStream ? 'Live stream (not available for this league)'
+                          : isAFL ? 'AFL Live Stream (free on MLB.com)' : isWin ? 'MLB.TV (subscription)' : 'MiLB.tv (subscription)';
+        tvOpt.disabled = noStream;
+        if (noStream && document.getElementById('linkType').value === 'tv') document.getElementById('linkType').value = 'gameday';
+        hint.textContent = noStream ? NO_STREAM_LEAGUES[win.leagueId] : '';
+        hint.style.display = noStream ? 'block' : 'none';
     }
 
     function saveSettings() {
