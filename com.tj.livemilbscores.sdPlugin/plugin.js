@@ -17,10 +17,20 @@ const fs     = require('fs');
 const LOG_FILE = path.join(__dirname, 'plugin.log');
 try { fs.writeFileSync(LOG_FILE, `=== MiLB Plugin ${new Date().toISOString()} ===\nNode: ${process.version}\nArgs: ${process.argv.slice(2).join(' ')}\n`); } catch (e) { /* ignore */ }
 
+// plugin.log is only reset when the plugin starts, so on a deck that stays up
+// for days it would otherwise grow without limit (every poll logs a few lines).
+// Past LOG_MAX_BYTES it is truncated and starts over.
+const LOG_MAX_BYTES = 512 * 1024;
+let   logBytes      = 0;
+
 function log(...args) {
     const ts   = new Date().toISOString().slice(11, 19);
     const line = `[${ts}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')}\n`;
-    try { fs.appendFileSync(LOG_FILE, line); } catch (e) { /* ignore */ }
+    try {
+        if (logBytes > LOG_MAX_BYTES) { fs.writeFileSync(LOG_FILE, `=== log trimmed ${new Date().toISOString()} ===\n`); logBytes = 0; }
+        fs.appendFileSync(LOG_FILE, line);
+        logBytes += line.length;
+    } catch (e) { /* ignore */ }
 }
 
 process.on('uncaughtException',  err => log('CRASH:', err.stack || err.message));
@@ -346,6 +356,9 @@ async function refreshButton(context) {
     log('Refreshing', cfg.teamAbbr || cfg.teamId);
     try {
         const game = await fetchTodayGame(cfg.teamId);
+        // The key may have left the screen while the request was in flight;
+        // presenting now would re-create its per-key memory for nothing.
+        if (!instances.has(context)) return;
         currentGame.set(context, game || null);
         dhOtherGame.set(context, game?.otherGame || null);
         if (!game || game.state !== 'final') gameFinalAt.delete(context);
@@ -719,93 +732,161 @@ const AFL_SCHEDULE_URL = 'https://www.mlb.com/arizona-fall-league/schedule';
 // (e.g. /video/live-fall-league-gdd-mss-193557) whose ID isn't tied to the gamePk
 // and isn't exposed by the Stats API, so we open the league's stream hub instead.
 const AFL_STREAMS_URL  = 'https://www.mlb.com/arizona-fall-league/live-streams';
-function fetchTodayGame(teamId) {
+// "Today" as YYYY-MM-DD. The schedule's dates are US dates, so "today" is read
+// in America/New_York rather than from the host clock — a viewer in London or
+// Tokyo would otherwise ask for tomorrow's slate while tonight's games were
+// still on. The day rolls over at 5:00 AM Eastern (= 2:00 AM Pacific, the old
+// West Coast behavior), so a late-running game or its final stays on the key
+// well past midnight everywhere. Built-in Intl only.
+const ET_ZONE   = 'America/New_York';
+const ET_FORMAT = new Intl.DateTimeFormat('en-US', {
+    timeZone: ET_ZONE, hourCycle: 'h23',
+    year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric',
+});
+const DAY_ROLLOVER_ET_HOUR = 5;
+
+function etParts(ms) {
+    const o = {};
+    for (const p of ET_FORMAT.formatToParts(new Date(ms))) o[p.type] = p.value;
+    return { year: +o.year, month: +o.month, day: +o.day };
+}
+function scheduleDate() {
+    const p = etParts(Date.now() - DAY_ROLLOVER_ET_HOUR * 3600e3);
+    return p.year + '-' + String(p.month).padStart(2, '0') + '-' + String(p.day).padStart(2, '0');
+}
+// YYYY-MM-DD plus n days, by calendar (host timezone and DST can't matter).
+function addDays(ymd, n) {
+    const d = new Date(ymd + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+}
+
+// ── Shared fetch cache ────────────────────────────────────────────────────────
+// Every schedule read goes through cachedJson(): one request per URL per TTL no
+// matter how many keys ask for it, and keys that ask while the request is still
+// in flight share its promise — so keys that start together (a page switch, or
+// the plugin starting with a full page) cost 1 request, not one each.
+//
+// If the feed stops answering, the last good response for that same URL keeps
+// driving the keys for up to STALE_MAX_MS instead of dropping every key to
+// "Err", and a small amber dot marks them as not live (isStale(), drawn by
+// setButton). Failures with nothing usable cached still reject, as before.
+const FETCH_TTL_MS = 20_000;
+const STALE_MAX_MS = 10 * 60_000;
+const jsonCache = new Map(); // url -> { at, promise }
+const jsonGood  = new Map(); // url -> { at, data }   last good response
+const jsonFails = new Map(); // url -> time it started failing (served stale since)
+
+function isStale() {
+    const now = Date.now();
+    for (const [u, t] of jsonFails) if (now - t > STALE_MAX_MS) jsonFails.delete(u);
+    return jsonFails.size > 0;
+}
+
+function cachedJson(url, ttlMs = FETCH_TTL_MS) {
+    const now = Date.now();
+    const hit = jsonCache.get(url);
+    if (hit && now - hit.at < ttlMs) return hit.promise;
+
+    // keep the maps bounded: dated URLs pile up over a long session
+    for (const [u, v] of jsonCache) if (now - v.at > STALE_MAX_MS) jsonCache.delete(u);
+    for (const [u, v] of jsonGood)  if (now - v.at > STALE_MAX_MS) jsonGood.delete(u);
+
+    const promise = httpsGetJson(url).then(data => {
+        jsonGood.set(url, { at: Date.now(), data });
+        if (jsonFails.delete(url)) log('Feed answering again — data live');
+        return data;
+    }, err => {
+        const good = jsonGood.get(url);
+        if (good && Date.now() - good.at < STALE_MAX_MS) {
+            if (!jsonFails.has(url)) { jsonFails.set(url, Date.now()); log('Feed failed — showing cached data:', err.message); }
+            return good.data;
+        }
+        if (jsonCache.get(url) && jsonCache.get(url).promise === promise) jsonCache.delete(url); // retry on the next poll
+        throw err;
+    });
+    jsonCache.set(url, { at: now, promise });
+    return promise;
+}
+
+// GET a URL as parsed JSON. The socket timeout only fires when the connection
+// goes quiet, so FETCH_DEADLINE_MS caps the whole request, and the promise
+// settles exactly once whichever way it ends.
+const FETCH_DEADLINE_MS = 20_000;
+
+function httpsGetJson(url) {
     return new Promise((resolve, reject) => {
-        const now  = new Date();
-        // Don't roll to the next day's schedule until 2am — covers late-running games
-        if (now.getHours() < 2) now.setDate(now.getDate() - 1);
-        const date = now.getFullYear() + '-' +
-                     String(now.getMonth() + 1).padStart(2, '0') + '-' +
-                     String(now.getDate()).padStart(2, '0');
-        // sportId=11,12,13,14 covers Triple-A, Double-A, High-A, Single-A; 17 adds the
-        // Arizona Fall League and the Mexican / Venezuelan / Dominican winter leagues
-        // (sport 17 is all winter leagues; we query by teamId, so only the tracked club comes back)
-        const url = 'https://statsapi.mlb.com/api/v1/schedule' +
-                    '?sportId=' + SPORT_IDS + '&date=' + date +
-                    '&teamId=' + teamId +
-                    '&hydrate=linescore,team';
+        let settled = false, deadline = null;
+        const settle = (fn, value) => { if (settled) return; settled = true; clearTimeout(deadline); fn(value); };
 
         const req = https.get(url, { headers: { 'User-Agent': 'StreamDeckMiLBScores/1.0' } }, res => {
             let body = '';
             res.on('data', chunk => body += chunk);
+            res.on('error', e => settle(reject, e));
             res.on('end', () => {
-                try {
-                    const game = parseSchedule(JSON.parse(body));
-                    if (game) return resolve(game);
-                    // Truly an off day — look ahead to the next scheduled game instead of a dead end
-                    fetchNextGame(teamId, date).then(resolve).catch(() => resolve(null));
-                }
-                catch (e) { reject(e); }
+                try { settle(resolve, JSON.parse(body)); }
+                catch (e) { settle(reject, e); }
             });
         });
 
-        req.on('error', reject);
-        req.setTimeout(10_000, () => { req.destroy(); reject(new Error('Request timed out')); });
+        deadline = setTimeout(() => { req.destroy(); settle(reject, new Error('Request timed out')); }, FETCH_DEADLINE_MS);
+        req.on('error', e => settle(reject, e));
+        req.setTimeout(10_000, () => { req.destroy(); settle(reject, new Error('Request timed out')); });
     });
+}
+
+const NEXT_GAME_TTL_MS = 5 * 60_000; // off-day lookups: the schedule rarely changes, so don't ask every 30 s per key
+
+async function fetchTodayGame(teamId) {
+    const date = scheduleDate();
+    // sportId=11,12,13,14 covers Triple-A, Double-A, High-A, Single-A; 17 adds the
+    // Arizona Fall League and the Mexican / Venezuelan / Dominican winter leagues
+    // (sport 17 is all winter leagues; we query by teamId, so only the tracked club comes back)
+    const url = 'https://statsapi.mlb.com/api/v1/schedule' +
+                '?sportId=' + SPORT_IDS + '&date=' + date +
+                '&teamId=' + teamId +
+                '&hydrate=linescore,team';
+
+    const game = parseSchedule(await cachedJson(url));
+    if (game) return game;
+    // Truly an off day — look ahead to the next scheduled game instead of a dead end
+    try { return await fetchNextGame(teamId, date); } catch (e) { return null; }
 }
 
 // ── Next scheduled game (shown on off days instead of a dead-end "No Game") ──
 // Looks ahead up to two weeks from the given date for this team's next game.
-function fetchNextGame(teamId, afterDate) {
-    return new Promise((resolve, reject) => {
-        const start = new Date(afterDate + 'T00:00:00');
-        start.setDate(start.getDate() + 1);
-        const end = new Date(start);
-        end.setDate(end.getDate() + 14);
-        const fmt = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-        const url = 'https://statsapi.mlb.com/api/v1/schedule' +
-                    '?sportId=' + SPORT_IDS + '&teamId=' + teamId +
-                    '&startDate=' + fmt(start) + '&endDate=' + fmt(end) +
-                    '&hydrate=team';
+async function fetchNextGame(teamId, afterDate) {
+    const url = 'https://statsapi.mlb.com/api/v1/schedule' +
+                '?sportId=' + SPORT_IDS + '&teamId=' + teamId +
+                '&startDate=' + addDays(afterDate, 1) + '&endDate=' + addDays(afterDate, 15) +
+                '&hydrate=team';
 
-        const req = https.get(url, { headers: { 'User-Agent': 'StreamDeckMiLBScores/1.0' } }, res => {
-            let body = '';
-            res.on('data', chunk => body += chunk);
-            res.on('end', () => {
-                try {
-                    const data  = JSON.parse(body);
-                    const dates = data?.dates || [];
-                    for (const d of dates) {
-                        const games = (d.games || []).slice().sort((a, b) => (a.gameNumber || 1) - (b.gameNumber || 1));
-                        for (const g of games) {
-                            const homeAbbr = g?.teams?.home?.team?.abbreviation || 'HME';
-                            const awayAbbr = g?.teams?.away?.team?.abbreviation || 'AWY';
-                            const homeName = g?.teams?.home?.team?.teamName;
-                            const awayName = g?.teams?.away?.team?.teamName;
-                            if (!homeName || !awayName) continue;
-                            const matchup   = awayAbbr + ' @ ' + homeAbbr;
-                            const startISO  = g.gameDate || null;
-                            // Use the schedule bucket's official date, not the game's UTC timestamp —
-                            // slicing the ISO string rolls to the next day for any West Coast/Mountain
-                            // evening game whose UTC start crosses midnight (e.g. 7:10pm MT = 1:10am UTC).
-                            const gameDate  = d.date ? d.date.replace(/-/g, '/') : '2000/01/01';
-                            const startTBD  = g.status?.startTimeTBD || false;
-                            const time = startTBD ? 'TBD' : fmtTime(startISO);
-                            return resolve({
-                                state: 'nextgame', matchup, startISO, time, gamePk: g.gamePk, gameDate,
-                                isWinter: isWinterLeague(g?.teams?.home?.team?.league?.id),
-                                homeSlug: toSlug(homeName), awaySlug: toSlug(awayName),
-                            });
-                        }
-                    }
-                    resolve(null);
-                } catch (e) { reject(e); }
-            });
-        });
-
-        req.on('error', reject);
-        req.setTimeout(10_000, () => { req.destroy(); reject(new Error('Request timed out')); });
-    });
+    const data  = await cachedJson(url, NEXT_GAME_TTL_MS);
+    const dates = data?.dates || [];
+    for (const d of dates) {
+        const games = (d.games || []).slice().sort((a, b) => (a.gameNumber || 1) - (b.gameNumber || 1));
+        for (const g of games) {
+            const homeAbbr = g?.teams?.home?.team?.abbreviation || 'HME';
+            const awayAbbr = g?.teams?.away?.team?.abbreviation || 'AWY';
+            const homeName = g?.teams?.home?.team?.teamName;
+            const awayName = g?.teams?.away?.team?.teamName;
+            if (!homeName || !awayName) continue;
+            const matchup   = awayAbbr + ' @ ' + homeAbbr;
+            const startISO  = g.gameDate || null;
+            // Use the schedule bucket's official date, not the game's UTC timestamp —
+            // slicing the ISO string rolls to the next day for any West Coast/Mountain
+            // evening game whose UTC start crosses midnight (e.g. 7:10pm MT = 1:10am UTC).
+            const gameDate  = d.date ? d.date.replace(/-/g, '/') : '2000/01/01';
+            const startTBD  = g.status?.startTimeTBD || false;
+            const time = startTBD ? 'TBD' : fmtTime(startISO);
+            return {
+                state: 'nextgame', matchup, startISO, time, gamePk: g.gamePk, gameDate,
+                isWinter: isWinterLeague(g?.teams?.home?.team?.league?.id),
+                homeSlug: toSlug(homeName), awaySlug: toSlug(awayName),
+            };
+        }
+    }
+    return null;
 }
 
 // Convert a MiLB teamName (mascot only, e.g. "Jumbo Shrimp") to a URL slug
@@ -1107,7 +1188,7 @@ function baseballPregameLines(game, last) {
     return pregameLines(away, home, false, day, when.time, last);
 }
 
-function makeImage(lines, lineSpacing = 1.4, bgColor = 'black', bgOpacity = 1) {
+function makeImage(lines, lineSpacing = 1.4, bgColor = 'black', bgOpacity = 1, stale = false) {
     const W = 72, H = 72, PAD = 4, MAX_W = W - PAD * 2;
 
     const items = lines.map(l => {
@@ -1147,7 +1228,7 @@ function makeImage(lines, lineSpacing = 1.4, bgColor = 'black', bgOpacity = 1) {
     const svg =
         `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="144" height="144" overflow="hidden">` +
         `<rect width="${W}" height="${H}" fill="${bgColor}" fill-opacity="${bgOpacity}"/>` +
-        rows + `</svg>`;
+        rows + (stale ? `<circle cx="65" cy="7" r="3.2" fill="#FFB020"/>` : '') + `</svg>`;
 
     return 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
 }
@@ -1206,6 +1287,7 @@ async function playFireworks(context, winnerName, winnerColor) {
     } finally {
         flashing.delete(context);
         lastRender.delete(context);
+        if (!instances.has(context)) return; // key left the screen mid-animation — nothing to redraw
         refreshButton(context);
     }
 }
@@ -1215,12 +1297,13 @@ async function playFireworks(context, winnerName, winnerColor) {
 // latter here so makeImage always gets a fill string + numeric opacity.
 function setButton(context, lines, lineSpacing, bgColor, force) {
     const bg = (bgColor && typeof bgColor === 'object') ? bgColor : { fill: bgColor || 'black', opacity: 1 };
-    const key = JSON.stringify({ lines, bg });
+    const stale = isStale();
+    const key = JSON.stringify({ lines, bg, stale });
     if (!force) {
         if (lastRender.get(context) === key) return;
         lastRender.set(context, key);
     }
-    ws.send(JSON.stringify({ event: 'setImage', context, payload: { image: makeImage(lines, lineSpacing, bg.fill, bg.opacity), target: 0 } }));
+    ws.send(JSON.stringify({ event: 'setImage', context, payload: { image: makeImage(lines, lineSpacing, bg.fill, bg.opacity, stale), target: 0 } }));
 }
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
@@ -1258,6 +1341,6 @@ async function flashButton(context, color, lines, spacing, restColor = 'black', 
         }
     } finally {
         flashing.delete(context);
-        setButton(context, lines, spacing, restColor, true);
+        if (instances.has(context)) setButton(context, lines, spacing, restColor, true);
     }
 }
