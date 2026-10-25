@@ -2,6 +2,11 @@
 
 Full version history for Live MiLB Scores, newest first. The [README](README.md) lists the three most recent updates.
 
+**v1.0.39.0**
+- New: three more winter leagues — the Puerto Rican league (LBPRC), the Australian Baseball League (ABL) and the Caribbean Series. Pick Winter Leagues in the Level dropdown, or just search a team (e.g. Santurce, Perth, Dominican Republic). Live scores, run cards and fireworks work the same as the other winter leagues
+- Puerto Rican games open the game's own MLB.TV stream once it starts, like the Mexican and Dominican leagues. Australian and Caribbean Series games aren't streamed on MLB.TV, so for those teams the stream option is greyed out with a note, and the key opens Gameday (Custom Link still works)
+- The amber "not live" dot now shows only on keys whose own team's data is stale, instead of on every key when any one feed hiccups
+
 **v1.0.38.0**
 - Fixed: "today" is now read in Eastern time, which is how MLB dates its schedule. Outside the US the keys could ask for tomorrow's slate while tonight's games were still on. The day now changes at 5:00 AM Eastern (2:00 AM Pacific), so late games and their finals stay on the keys overnight everywhere
 - If MLB's data stops responding for a moment, keys keep showing the last scores with a small amber dot instead of "Err" (after 10 minutes without an update they show "Err")

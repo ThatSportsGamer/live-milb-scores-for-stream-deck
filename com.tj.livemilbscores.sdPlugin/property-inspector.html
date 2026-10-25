@@ -385,15 +385,19 @@
     // level 17; the Mexican / Venezuelan / Dominican winter leagues share a made-up
     // level 99 ("Winter Leagues") so they get their own spot in the Level dropdown.
     var WINTER_LEVEL  = 99;
-    var LEVEL_LABELS = { 11: 'Triple-A', 12: 'Double-A', 13: 'High-A', 14: 'Single-A', 17: 'Arizona Fall League', 99: 'Winter Leagues (Mexico, Venezuela, Dominican Rep.)' };
+    var LEVEL_LABELS = { 11: 'Triple-A', 12: 'Double-A', 13: 'High-A', 14: 'Single-A', 17: 'Arizona Fall League', 99: 'Winter Leagues (Caribbean, Mexico, Venezuela, Australia)' };
     var LEVEL_ABBR   = { 11: 'AAA', 12: 'AA', 13: 'A+', 14: 'A', 17: 'AFL', 99: 'WIN' };
     var AFL_SPORT_ID  = 17;
     var LEVEL_ORDER   = { 11: 0, 12: 1, 13: 2, 14: 3, 17: 4, 99: 5 };
     var AFL_LEAGUE_ID = 119;
-    // 132 Mexican Pacific, 135 Venezuela, 131 Dominican — short tags for search results
-    var WINTER_LEAGUES = { 132: 'LMP', 135: 'LVBP', 131: 'LIDOM' };
+    // 132 Mexican Pacific, 135 Venezuela, 131 Dominican, 133 Puerto Rico, 595 Australia, 162 Caribbean Series — short tags for search results
+    var WINTER_LEAGUES = { 132: 'LMP', 135: 'LVBP', 131: 'LIDOM', 133: 'LBPRC', 595: 'ABL', 162: 'CS' };
     // Leagues whose games aren't streamed on MLB.TV — the stream option is greyed out with this note
-    var NO_STREAM_LEAGUES = { 135: "Venezuelan league games aren't streamed on MLB.TV, so the key opens the game on MLB Gameday." };
+    var NO_STREAM_LEAGUES = {
+        135: "Venezuelan league games aren't streamed on MLB.TV, so the key opens the game on MLB Gameday.",
+        595: "Australian Baseball League games aren't streamed on MLB.TV, so the key opens the game on MLB Gameday. Use Custom Link for the league's own stream.",
+        162: "Caribbean Series games air on MLB Network (TV), so the key opens the game on MLB Gameday."
+    };
 
     // 30 MLB parent orgs (sorted alphabetically, IDs are stable year-to-year)
     var MLB_ORGS = [
@@ -456,7 +460,7 @@
             })
             .then(function(data) {
                 allTeams = (data.teams || []).filter(function(t) {
-                    // Sport 17 also holds Puerto Rico and the ABL — keep the AFL and the three winter leagues
+                    // Sport 17 holds the AFL plus every winter league — keep the AFL and the winter leagues listed in WINTER_LEAGUES
                     var sid = (t.sport && t.sport.id) || 0;
                     var lid = (t.league && t.league.id) || 0;
                     return sid !== AFL_SPORT_ID || lid === AFL_LEAGUE_ID || !!WINTER_LEAGUES[lid];
@@ -686,7 +690,12 @@
                 leagues.push({ id: t.leagueId, name: t.leagueName });
             }
         });
-        leagues.sort(function(a, b) { return a.name.localeCompare(b.name); });
+        // Alphabetical, except the Caribbean Series (162) goes after the Spanish-language leagues and Australia (595) last
+        var LEAGUE_TAIL = { 162: 1, 595: 2 };
+        leagues.sort(function(a, b) {
+            var ta = LEAGUE_TAIL[a.id] || 0, tb = LEAGUE_TAIL[b.id] || 0;
+            return ta !== tb ? ta - tb : a.name.localeCompare(b.name);
+        });
 
         addBlank(sel, '— Select a league —');
         // Winter leagues get their short name too: "Liga Mexicana del Pacifico (LMP)"

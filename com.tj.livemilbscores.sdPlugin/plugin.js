@@ -718,14 +718,16 @@ async function resolveWinterStreamUrl(game) {
 const SPORT_IDS   = '11,12,13,14,17';
 const AFL_LEAGUE_ID = 119;
 // Caribbean / Mexican winter leagues, also in sport 17 (added 1.0.37.0):
-// 131 Dominican (LIDOM), 132 Mexican Pacific (LMP), 135 Venezuela (LVBP).
+// 131 Dominican (LIDOM), 132 Mexican Pacific (LMP), 135 Venezuela (LVBP);
+// 133 Puerto Rico (LBPRC), 595 Australia (ABL) and 162 Caribbean Series added in 1.0.39.0.
 // MLB.com Gameday covers their games (/gameday/<gamePk> redirects to the full page);
-// LMP and LIDOM stream on MLB.TV as featured videos (see WINTER_STREAMS_URL). No MiLB.com pages, no parent orgs.
-const WINTER_LEAGUE_IDS = [131, 132, 135];
+// LMP and LIDOM stream on MLB.TV as featured videos (see WINTER_STREAMS_URL), and Puerto Rico is
+// treated the same way (the lookup falls back to the MLB.TV list if it finds nothing). No MiLB.com pages, no parent orgs.
+const WINTER_LEAGUE_IDS = [131, 132, 135, 133, 595, 162];
 // isWinter holds the league id (truthy) so links can tell the leagues apart
 const isWinterLeague = id => WINTER_LEAGUE_IDS.includes(id) ? id : false;
-// Leagues with no MLB.TV stream (Venezuela) — the stream option opens Gameday instead
-const NO_STREAM_LEAGUE_IDS = [135];
+// Leagues with no MLB.TV stream (Venezuela, Australia, Caribbean Series) — the stream option opens Gameday instead
+const NO_STREAM_LEAGUE_IDS = [135, 595, 162];
 const WINTER_STREAMS_URL = 'https://www.mlb.com/tv/shows/mlbtv-featured-svod-video-list';
 const AFL_SCHEDULE_URL = 'https://www.mlb.com/arizona-fall-league/schedule';
 // AFL games stream free on MLB.com, not MiLB.tv. Each stream is a CMS video
@@ -777,10 +779,16 @@ const jsonCache = new Map(); // url -> { at, promise }
 const jsonGood  = new Map(); // url -> { at, data }   last good response
 const jsonFails = new Map(); // url -> time it started failing (served stale since)
 
-function isStale() {
+// Per key: a key shows the dot only when a URL for ITS team is being served stale
+// (both of a key's reads carry "&teamId=<id>&"), so one club's hiccup doesn't
+// mark every other key as not live.
+function isStale(teamId) {
     const now = Date.now();
     for (const [u, t] of jsonFails) if (now - t > STALE_MAX_MS) jsonFails.delete(u);
-    return jsonFails.size > 0;
+    if (!teamId || jsonFails.size === 0) return false;
+    const needle = '&teamId=' + teamId + '&';
+    for (const u of jsonFails.keys()) if (u.includes(needle)) return true;
+    return false;
 }
 
 function cachedJson(url, ttlMs = FETCH_TTL_MS) {
@@ -1297,7 +1305,7 @@ async function playFireworks(context, winnerName, winnerColor) {
 // latter here so makeImage always gets a fill string + numeric opacity.
 function setButton(context, lines, lineSpacing, bgColor, force) {
     const bg = (bgColor && typeof bgColor === 'object') ? bgColor : { fill: bgColor || 'black', opacity: 1 };
-    const stale = isStale();
+    const stale = isStale((instances.get(context) || {}).teamId);
     const key = JSON.stringify({ lines, bg, stale });
     if (!force) {
         if (lastRender.get(context) === key) return;

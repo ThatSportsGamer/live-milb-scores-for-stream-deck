@@ -2,16 +2,16 @@
 
 ![Live MiLB Scores in action](assets/LiveMiLBScoresThumbnail.png)
 
-A Stream Deck plugin that shows live Minor League Baseball scores directly on your keys. Each key tracks one team and updates automatically every 30 seconds. Covers Triple-A through Single-A, the Arizona Fall League, and the winter leagues in Mexico, Venezuela and the Dominican Republic.
+A Stream Deck plugin that shows live Minor League Baseball scores directly on your keys. Each key tracks one team and updates automatically every 30 seconds. Covers Triple-A through Single-A, the Arizona Fall League, and the winter leagues in Mexico, Venezuela, the Dominican Republic, Puerto Rico and Australia, plus the Caribbean Series.
 
-![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.38-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-milb-scores-c8a87c49-0980-4d7a-b8a4-b93334414733)
+![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.39-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-milb-scores-c8a87c49-0980-4d7a-b8a4-b93334414733)
 
 ---
 
 ## Features
 
 - **Live scores** — shows away score, home score, and current inning while a game is in progress
-- **Fall and winter ball** — follow Arizona Fall League clubs and teams in the Mexican Pacific League (LMP), the Venezuelan league (LVBP) and the Dominican league (LIDOM), with the same live scores, run cards and fireworks
+- **Fall and winter ball** — follow Arizona Fall League clubs and teams in the Mexican Pacific League (LMP), the Venezuelan league (LVBP), the Dominican league (LIDOM), the Puerto Rican league (LBPRC), the Australian Baseball League (ABL) and the Caribbean Series, with the same live scores, run cards and fireworks
 - **Pre-game** — the two teams stacked (`CLT` over `@ JAX`) and the start time; on off days, your team's next game with its day and time
 - **Final scores** — shows the final score with a "Final" label
 - **Score-change flash** — when your team scores, the key blinks in its MLB parent organization's color (gray when the opponent scores), then shows a short card with the scoring team and how many runs scored (e.g. SWB / +2 RUNS)
@@ -32,6 +32,11 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 
 ## Recent Updates
 
+**v1.0.39.0**
+- New: three more winter leagues — the Puerto Rican league (LBPRC), the Australian Baseball League (ABL) and the Caribbean Series. Pick Winter Leagues in the Level dropdown, or just search a team (e.g. Santurce, Perth, Dominican Republic). Live scores, run cards and fireworks work the same as the other winter leagues
+- Puerto Rican games open the game's own MLB.TV stream once it starts, like the Mexican and Dominican leagues. Australian and Caribbean Series games aren't streamed on MLB.TV, so for those teams the stream option is greyed out with a note, and the key opens Gameday (Custom Link still works)
+- The amber "not live" dot now shows only on keys whose own team's data is stale, instead of on every key when any one feed hiccups
+
 **v1.0.38.0**
 - Fixed: "today" is now read in Eastern time, which is how MLB dates its schedule. Outside the US the keys could ask for tomorrow's slate while tonight's games were still on. The day now changes at 5:00 AM Eastern (2:00 AM Pacific), so late games and their finals stay on the keys overnight everywhere
 - If MLB's data stops responding for a moment, keys keep showing the last scores with a small amber dot instead of "Err" (after 10 minutes without an update they show "Err")
@@ -40,16 +45,6 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 - New: winter leagues — follow any team in the Mexican Pacific League (LMP), the Venezuelan league (LVBP) or the Dominican league (LIDOM). Pick Winter Leagues in the Level dropdown, or just search a team (e.g. Culiacan, Leones). Live scores, run cards and fireworks work the same as the AFL
 - Winter league keys open the game on MLB.com Gameday; the stream option opens the game's own MLB.TV stream once it starts (LMP and LIDOM games; if the stream can't be found, MLB.TV's featured games list). Venezuelan games aren't on MLB.TV, so for those teams the stream option is greyed out with a note, and the key opens Gameday (Custom Link still works)
 - Now runs on Node.js 24 and needs Stream Deck 7.1 or later (Elgato is retiring Node.js 20)
-
-**v1.0.36.0**
-- Pregame keys match the NFL, CFB, NHL and NBA plugins: the teams stack on two lines (away team on top, "@ home" below, with a small "@"), then the start time. On game day it's just the teams and the time; for a later day the day gets its own gray line above the time
-- Off-day keys show your team's next game the same way: the "Next Game" label is gone, and the day line reads the weekday ("Thursday"), or the date when it's a week or more away
-- Doubleheaders put the game number on the day line ("Game 2")
-- Postponed, canceled, suspended, delayed and warmup keys use the same stacked teams
-
-Older updates: see the full version history in [CHANGELOG.md](CHANGELOG.md).
-
----
 
 ## Requirements
 
@@ -88,7 +83,7 @@ Older updates: see the full version history in [CHANGELOG.md](CHANGELOG.md).
 | High-A | Midwest League, Northwest League, South Atlantic League |
 | Single-A | California League, Carolina League, Florida State League |
 | Arizona Fall League | Arizona Fall League (October–November) |
-| Winter Leagues | Mexican Pacific League (LMP), Venezuelan League (LVBP), Dominican League (LIDOM) (October–December) |
+| Winter Leagues | Mexican Pacific League (LMP), Venezuelan League (LVBP), Dominican League (LIDOM), Puerto Rican League (LBPRC), Australian Baseball League (ABL), Caribbean Series (October–February) |
 
 ![Browse by League](assets/LiveMiLBScoresSettingsSelectByLeague.png)
 
@@ -99,7 +94,7 @@ Older updates: see the full version history in [CHANGELOG.md](CHANGELOG.md).
 3. Choose what happens when you press the key:
    - **MiLB Gameday (free)** — opens the game's Gameday page on MiLB.com (winter league teams open the game on MLB.com Gameday)
    - **MiLB.tv (subscription)** — opens the live stream page on MiLB.com
-     (for Arizona Fall League teams this option reads **AFL Live Stream (free on MLB.com)** and opens that game's free stream on MLB.com, or the AFL live-streams page if the stream isn't up yet; for Mexican and Dominican winter league teams it opens the game's MLB.TV stream once it starts; Venezuelan games aren't on MLB.TV, so that option is greyed out for those teams)
+     (for Arizona Fall League teams this option reads **AFL Live Stream (free on MLB.com)** and opens that game's free stream on MLB.com, or the AFL live-streams page if the stream isn't up yet; for Mexican, Dominican and Puerto Rican winter league teams it opens the game's MLB.TV stream once it starts; Venezuelan, Australian and Caribbean Series games aren't on MLB.TV, so that option is greyed out for those teams)
    - **Custom Link** — opens any URL you enter, such as your regional sports network's live-game page
 
 That's it. The key will load your team's game within a few seconds and refresh every 30 seconds from there.
@@ -145,7 +140,7 @@ Thursday
 
 ## How It Works
 
-The plugin polls [MLB's free public Stats API](https://statsapi.mlb.com) once every 30 seconds per key using sport IDs for all four MiLB levels (Triple-A through Single-A), the Arizona Fall League and the Mexican, Venezuelan and Dominican winter leagues. No API key or account is required. The plugin is fully self-contained — it uses only Node.js built-in modules and requires no external dependencies.
+The plugin polls [MLB's free public Stats API](https://statsapi.mlb.com) once every 30 seconds per key using sport IDs for all four MiLB levels (Triple-A through Single-A), the Arizona Fall League and the Mexican, Venezuelan, Dominican, Puerto Rican and Australian winter leagues and the Caribbean Series. No API key or account is required. The plugin is fully self-contained — it uses only Node.js built-in modules and requires no external dependencies.
 
 ---
 
