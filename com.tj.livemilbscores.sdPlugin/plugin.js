@@ -726,8 +726,8 @@ const AFL_LEAGUE_ID = 119;
 const WINTER_LEAGUE_IDS = [131, 132, 135, 133, 595, 162];
 // isWinter holds the league id (truthy) so links can tell the leagues apart
 const isWinterLeague = id => WINTER_LEAGUE_IDS.includes(id) ? id : false;
-// Leagues with no MLB.TV stream (Venezuela, Australia, Caribbean Series) — the stream option opens Gameday instead
-const NO_STREAM_LEAGUE_IDS = [135, 595, 162];
+// Leagues with no stream link (Venezuela, Puerto Rico, Australia, Caribbean Series) — the stream option opens Gameday instead
+const NO_STREAM_LEAGUE_IDS = [135, 133, 595, 162];
 const WINTER_STREAMS_URL = 'https://www.mlb.com/tv/shows/mlbtv-featured-svod-video-list';
 const AFL_SCHEDULE_URL = 'https://www.mlb.com/arizona-fall-league/schedule';
 // AFL games stream free on MLB.com, not MiLB.tv. Each stream is a CMS video

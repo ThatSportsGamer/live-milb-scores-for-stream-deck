@@ -34,7 +34,7 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 
 **v1.0.39.0**
 - New: three more winter leagues — the Puerto Rican league (LBPRC), the Australian Baseball League (ABL) and the Caribbean Series. Pick Winter Leagues in the Level dropdown, or just search a team (e.g. Santurce, Perth, Dominican Republic). Live scores, run cards and fireworks work the same as the other winter leagues
-- Puerto Rican games open the game's own MLB.TV stream once it starts, like the Mexican and Dominican leagues. Australian and Caribbean Series games aren't streamed on MLB.TV, so for those teams the stream option is greyed out with a note, and the key opens Gameday (Custom Link still works)
+- No stream link yet for the Puerto Rican league, the Australian Baseball League or the Caribbean Series: for those teams the stream option is greyed out with a note, and the key opens Gameday (Custom Link still works)
 - The amber "not live" dot now shows only on keys whose own team's data is stale, instead of on every key when any one feed hiccups
 
 **v1.0.38.0**
@@ -94,7 +94,7 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 3. Choose what happens when you press the key:
    - **MiLB Gameday (free)** — opens the game's Gameday page on MiLB.com (winter league teams open the game on MLB.com Gameday)
    - **MiLB.tv (subscription)** — opens the live stream page on MiLB.com
-     (for Arizona Fall League teams this option reads **AFL Live Stream (free on MLB.com)** and opens that game's free stream on MLB.com, or the AFL live-streams page if the stream isn't up yet; for Mexican, Dominican and Puerto Rican winter league teams it opens the game's MLB.TV stream once it starts; Venezuelan, Australian and Caribbean Series games aren't on MLB.TV, so that option is greyed out for those teams)
+     (for Arizona Fall League teams this option reads **AFL Live Stream (free on MLB.com)** and opens that game's free stream on MLB.com, or the AFL live-streams page if the stream isn't up yet; for Mexican and Dominican winter league teams it opens the game's MLB.TV stream once it starts; Venezuelan, Puerto Rican, Australian and Caribbean Series games have no stream link, so that option is greyed out for those teams)
    - **Custom Link** — opens any URL you enter, such as your regional sports network's live-game page
 
 That's it. The key will load your team's game within a few seconds and refresh every 30 seconds from there.
