@@ -4,7 +4,7 @@
 
 A Stream Deck plugin that shows live Minor League Baseball scores directly on your keys. Each key tracks one team and updates automatically every 30 seconds. Covers Triple-A through Single-A, the Arizona Fall League, and the winter leagues in Mexico, Venezuela, the Dominican Republic, Puerto Rico and Australia, plus the Caribbean Series.
 
-![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.40-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-milb-scores-c8a87c49-0980-4d7a-b8a4-b93334414733)
+![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.39.1-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-milb-scores-c8a87c49-0980-4d7a-b8a4-b93334414733)
 
 ---
 
@@ -32,7 +32,7 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 
 ## Recent Updates
 
-**v1.0.40.0**
+**v1.0.39.1**
 - Australian Baseball League keys now follow Sydney time. The day turns over at 5:00 AM in Sydney (about 1:00 PM Eastern), so the morning's finals stay up through the US morning, then the keys show that night's games with their start times instead of waiting until they go live. Every other league still rolls over at 5:00 AM Eastern
 
 **v1.0.39.0**
