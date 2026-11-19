@@ -355,7 +355,7 @@ async function refreshButton(context) {
     refreshing.add(context);
     log('Refreshing', cfg.teamAbbr || cfg.teamId);
     try {
-        const game = await fetchTodayGame(cfg.teamId);
+        const game = await fetchTodayGame(cfg.teamId, cfg.leagueId);
         // The key may have left the screen while the request was in flight;
         // presenting now would re-create its per-key memory for nothing.
         if (!instances.has(context)) return;
@@ -756,6 +756,34 @@ function scheduleDate() {
     const p = etParts(Date.now() - DAY_ROLLOVER_ET_HOUR * 3600e3);
     return p.year + '-' + String(p.month).padStart(2, '0') + '-' + String(p.day).padStart(2, '0');
 }
+// Leagues that play far from Eastern time keep their own clock. The ABL dates its schedule by the
+// Australian local date and plays overnight ET, so on the Eastern clock its finals sat on the keys
+// all day and the next night's games never showed as pregame. On Sydney time with the same 5 AM
+// rollover, the day turns at about 1:00 PM ET (2:00 PM during US daylight time): finals stay up
+// through the US morning, then the keys show that night's games with their start times.
+const LEAGUE_CLOCK = { 595: 'Australia/Sydney' };
+const LEAGUE_FORMAT = {};
+function leagueScheduleDate(leagueId) {
+    const zone = LEAGUE_CLOCK[Number(leagueId)];
+    if (!zone) return scheduleDate();
+    const f = LEAGUE_FORMAT[zone] || (LEAGUE_FORMAT[zone] = new Intl.DateTimeFormat('en-US', {
+        timeZone: zone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric',
+    }));
+    const o = {};
+    for (const x of f.formatToParts(new Date(Date.now() - DAY_ROLLOVER_ET_HOUR * 3600e3))) o[x.type] = x.value;
+    return o.year + '-' + String(o.month).padStart(2, '0') + '-' + String(o.day).padStart(2, '0');
+}
+// The league a schedule response belongs to (first game's home club), for its clock.
+function slateLeagueId(data) {
+    for (const d of (data?.dates || [])) for (const g of (d.games || [])) {
+        const id = g?.teams?.home?.team?.league?.id;
+        if (id) return id;
+    }
+    return 0;
+}
+// Each team's league, learned from its schedule responses (team search doesn't save the league),
+// so a key asks for the right day's slate (an off day learns it from the look-ahead).
+const teamLeague = new Map(); // teamId -> league id
 // YYYY-MM-DD plus n days, by calendar (host timezone and DST can't matter).
 function addDays(ymd, n) {
     const d = new Date(ymd + 'T00:00:00Z');
@@ -845,20 +873,34 @@ function httpsGetJson(url) {
 
 const NEXT_GAME_TTL_MS = 5 * 60_000; // off-day lookups: the schedule rarely changes, so don't ask every 30 s per key
 
-async function fetchTodayGame(teamId) {
-    const date = scheduleDate();
+async function fetchTodayGame(teamId, leagueHint) {
     // sportId=11,12,13,14 covers Triple-A, Double-A, High-A, Single-A; 17 adds the
     // Arizona Fall League and the Mexican / Venezuelan / Dominican winter leagues
     // (sport 17 is all winter leagues; we query by teamId, so only the tracked club comes back)
-    const url = 'https://statsapi.mlb.com/api/v1/schedule' +
-                '?sportId=' + SPORT_IDS + '&date=' + date +
+    const urlFor = d => 'https://statsapi.mlb.com/api/v1/schedule' +
+                '?sportId=' + SPORT_IDS + '&date=' + d +
                 '&teamId=' + teamId +
                 '&hydrate=linescore,team';
 
-    const game = parseSchedule(await cachedJson(url));
+    // Eastern date, unless the team's league keeps its own clock (ABL: Sydney date)
+    let date = leagueScheduleDate(teamLeague.get(teamId) || leagueHint);
+    let data = await cachedJson(urlFor(date));
+    const league = slateLeagueId(data);
+    if (league) {
+        teamLeague.set(teamId, league);
+        const own = leagueScheduleDate(league);
+        if (own !== date) { date = own; data = await cachedJson(urlFor(date)); }
+    }
+
+    const game = parseSchedule(data);
     if (game) return game;
     // Truly an off day — look ahead to the next scheduled game instead of a dead end
-    try { return await fetchNextGame(teamId, date); } catch (e) { return null; }
+    let next = null;
+    try { next = await fetchNextGame(teamId, date); } catch (e) { return null; }
+    // An empty first day can't tell us the league; the look-ahead can. If it keeps its own clock, ask again on that date.
+    const learned = teamLeague.get(teamId);
+    if (!league && learned && leagueScheduleDate(learned) !== date) return fetchTodayGame(teamId, learned);
+    return next;
 }
 
 // ── Next scheduled game (shown on off days instead of a dead-end "No Game") ──
@@ -870,6 +912,8 @@ async function fetchNextGame(teamId, afterDate) {
                 '&hydrate=team';
 
     const data  = await cachedJson(url, NEXT_GAME_TTL_MS);
+    const league = slateLeagueId(data);
+    if (league) teamLeague.set(teamId, league);
     const dates = data?.dates || [];
     for (const d of dates) {
         const games = (d.games || []).slice().sort((a, b) => (a.gameNumber || 1) - (b.gameNumber || 1));

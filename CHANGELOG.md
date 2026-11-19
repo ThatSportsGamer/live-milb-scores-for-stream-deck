@@ -2,6 +2,9 @@
 
 Full version history for Live MiLB Scores, newest first. The [README](README.md) lists the three most recent updates.
 
+**v1.0.40.0**
+- Australian Baseball League keys now follow Sydney time. The day turns over at 5:00 AM in Sydney (about 1:00 PM Eastern), so the morning's finals stay up through the US morning, then the keys show that night's games with their start times instead of waiting until they go live. Every other league still rolls over at 5:00 AM Eastern
+
 **v1.0.39.0**
 - New: three more winter leagues — the Puerto Rican league (LBPRC), the Australian Baseball League (ABL) and the Caribbean Series. Pick Winter Leagues in the Level dropdown, or just search a team (e.g. Santurce, Perth, Dominican Republic). Live scores, run cards and fireworks work the same as the other winter leagues
 - No stream link yet for the Puerto Rican league, the Australian Baseball League or the Caribbean Series: for those teams the stream option is greyed out with a note, and the key opens Gameday (Custom Link still works)
