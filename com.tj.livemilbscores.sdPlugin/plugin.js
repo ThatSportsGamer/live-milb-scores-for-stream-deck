@@ -348,7 +348,7 @@ async function refreshButton(context) {
 
     const cfg = instances.get(context);
     if (!cfg || !cfg.teamId) {
-        setButton(context, ['Select A', 'Team In', 'Settings']);
+        setButton(context, ['Select a', 'Team in', 'Settings']);
         return;
     }
 

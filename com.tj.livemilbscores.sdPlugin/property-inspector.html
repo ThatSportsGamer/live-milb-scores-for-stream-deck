@@ -334,7 +334,7 @@
     <label for="linkType">Key Press Opens</label>
     <select id="linkType">
         <option value="gameday">MiLB Gameday (free)</option>
-        <option value="tv">MiLB.tv (subscription)</option>
+        <option value="tv">MiLB.TV (subscription)</option>
         <option value="custom">Custom Link</option>
     </select>
     <div id="streamHint" style="display:none;font-size:11px;color:#888;line-height:1.5;margin-top:6px;"></div>
@@ -828,7 +828,7 @@
         var hint   = document.getElementById('streamHint');
         document.querySelector('#linkType option[value="gameday"]').textContent = isWin ? 'MLB Gameday (free)' : 'MiLB Gameday (free)';
         tvOpt.textContent = noStream ? 'Live stream (not available for this league)'
-                          : isAFL ? 'AFL Live Stream (free on MLB.com)' : isWin ? 'MLB.TV (subscription)' : 'MiLB.tv (subscription)';
+                          : isAFL ? 'AFL Live Stream (free on MLB.com)' : isWin ? 'MLB.TV (subscription)' : 'MiLB.TV (subscription)';
         tvOpt.disabled = noStream;
         if (noStream && document.getElementById('linkType').value === 'tv') document.getElementById('linkType').value = 'gameday';
         hint.textContent = noStream ? NO_STREAM_LEAGUES[win.leagueId] : '';
