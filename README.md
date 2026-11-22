@@ -4,7 +4,7 @@
 
 A Stream Deck plugin that shows live Minor League Baseball scores directly on your keys. Each key tracks one team and updates automatically every 30 seconds. Covers Triple-A through Single-A, the Arizona Fall League, and the winter leagues in Mexico, Venezuela, the Dominican Republic, Puerto Rico, and Australia, plus the Caribbean Series.
 
-![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.39.1-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-milb-scores-c8a87c49-0980-4d7a-b8a4-b93334414733)
+![Live MiLB Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.0.39.2-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-milb-scores-c8a87c49-0980-4d7a-b8a4-b93334414733)
 
 ---
 
@@ -32,6 +32,9 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 
 ## Recent Updates
 
+**v1.0.39.2**
+- Australian Baseball League streams: the stream option now opens the game on MLB.TV, and ABL teams get a second choice, **Baseball+**, the league's own streaming site (some games are free, the rest need an ABL or team pass). Both open that game's own stream page once it starts
+
 **v1.0.39.1**
 - Australian Baseball League keys now follow Sydney time. The day turns over at 5:00 AM in Sydney (about 1:00 PM Eastern), so the morning's finals stay up through the US morning, then the keys show that night's games with their start times instead of waiting until they go live. Every other league still rolls over at 5:00 AM Eastern
 
@@ -39,10 +42,6 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 - New: three more winter leagues — the Puerto Rican league (LBPRC), the Australian Baseball League (ABL) and the Caribbean Series. Pick Winter Leagues in the Level dropdown, or just search a team (e.g. Santurce, Perth, Dominican Republic). Live scores, run cards and fireworks work the same as the other winter leagues
 - No stream link yet for the Puerto Rican league, the Australian Baseball League or the Caribbean Series: for those teams the stream option is greyed out with a note, and the key opens Gameday (Custom Link still works)
 - The amber "not live" dot now shows only on keys whose own team's data is stale, instead of on every key when any one feed hiccups
-
-**v1.0.38.0**
-- Fixed: "today" is now read in Eastern time, which is how MLB dates its schedule. Outside the US the keys could ask for tomorrow's slate while tonight's games were still on. The day now changes at 5:00 AM Eastern (2:00 AM Pacific), so late games and their finals stay on the keys overnight everywhere
-- If MLB's data stops responding for a moment, keys keep showing the last scores with a small amber dot instead of "Err" (after 10 minutes without an update they show "Err")
 
 ## Requirements
 
@@ -92,7 +91,8 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
 3. Choose what happens when you press the key:
    - **MiLB Gameday (free):** opens the game's Gameday page on MiLB.com (winter league teams open the game on MLB.com Gameday)
    - **MiLB.TV (subscription):** opens the live stream page on MiLB.com
-     (for Arizona Fall League teams this option reads **AFL Live Stream (free on MLB.com)** and opens that game's free stream on MLB.com, or the AFL live-streams page if the stream isn't up yet; for Mexican and Dominican winter league teams it opens the game's MLB.TV stream once it starts; Venezuelan, Puerto Rican, Australian, and Caribbean Series games have no stream link, so that option is greyed out for those teams)
+     (for Arizona Fall League teams this option reads **AFL Live Stream (free on MLB.com)** and opens that game's free stream on MLB.com, or the AFL live-streams page if the stream isn't up yet; for Mexican, Dominican and Australian winter league teams it opens the game's MLB.TV stream once it starts; Venezuelan, Puerto Rican and Caribbean Series games have no stream link, so that option is greyed out for those teams)
+   - **Baseball+ (ABL's own stream):** Australian Baseball League teams only. Opens the game's page on Baseball+, the league's streaming site, once it starts (some games are free, the rest need an ABL or team pass)
    - **Custom Link:** opens any URL you enter, such as your regional sports network's live-game page
 
 That's it. The key will load your team's game within a few seconds and refresh every 30 seconds from there.

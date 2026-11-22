@@ -335,6 +335,7 @@
     <select id="linkType">
         <option value="gameday">MiLB Gameday (free)</option>
         <option value="tv">MiLB.TV (subscription)</option>
+        <option value="bplus" hidden>Baseball+ (ABL's own stream)</option>
         <option value="custom">Custom Link</option>
     </select>
     <div id="streamHint" style="display:none;font-size:11px;color:#888;line-height:1.5;margin-top:6px;"></div>
@@ -393,10 +394,11 @@
     // 132 Mexican Pacific, 135 Venezuela, 131 Dominican, 133 Puerto Rico, 595 Australia, 162 Caribbean Series — short tags for search results
     var WINTER_LEAGUES = { 132: 'LMP', 135: 'LVBP', 131: 'LIDOM', 133: 'LBPRC', 595: 'ABL', 162: 'CS' };
     // Leagues whose games aren't streamed on MLB.TV — the stream option is greyed out with this note
+    var ABL_LEAGUE_ID = 595;
+    var ABL_STREAM_NOTE = "MLB.TV and Baseball+ both carry ABL games. Baseball+ needs an ABL or team pass, except for its free games.";
     var NO_STREAM_LEAGUES = {
         135: "Venezuelan league games aren't streamed on MLB.TV, so the key opens the game on MLB Gameday.",
         133: "No stream link is available for the Puerto Rican league yet, so the key opens the game on MLB Gameday. Use Custom Link for the league's own stream.",
-        595: "No stream link is available for the Australian Baseball League yet, so the key opens the game on MLB Gameday. Use Custom Link for the league's own stream.",
         162: "Caribbean Series games air on MLB Network (TV), so the key opens the game on MLB Gameday."
     };
 
@@ -831,8 +833,15 @@
                           : isAFL ? 'AFL Live Stream (free on MLB.com)' : isWin ? 'MLB.TV (subscription)' : 'MiLB.TV (subscription)';
         tvOpt.disabled = noStream;
         if (noStream && document.getElementById('linkType').value === 'tv') document.getElementById('linkType').value = 'gameday';
-        hint.textContent = noStream ? NO_STREAM_LEAGUES[win.leagueId] : '';
-        hint.style.display = noStream ? 'block' : 'none';
+        // ABL only: a second stream option, the league's own Baseball+ site
+        var isABL  = isWin && win.leagueId === ABL_LEAGUE_ID;
+        var bpOpt  = document.querySelector('#linkType option[value="bplus"]');
+        bpOpt.hidden = !isABL;
+        bpOpt.disabled = !isABL;
+        if (!isABL && document.getElementById('linkType').value === 'bplus') document.getElementById('linkType').value = 'gameday';
+        var note = noStream ? NO_STREAM_LEAGUES[win.leagueId] : isABL ? ABL_STREAM_NOTE : '';
+        hint.textContent = note;
+        hint.style.display = note ? 'block' : 'none';
     }
 
     function saveSettings() {
