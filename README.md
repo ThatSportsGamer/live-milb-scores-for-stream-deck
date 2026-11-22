@@ -92,7 +92,7 @@ A Stream Deck plugin that shows live Minor League Baseball scores directly on yo
    - **MiLB Gameday (free):** opens the game's Gameday page on MiLB.com (winter league teams open the game on MLB.com Gameday)
    - **MiLB.TV (subscription):** opens the live stream page on MiLB.com
      (for Arizona Fall League teams this option reads **AFL Live Stream (free on MLB.com)** and opens that game's free stream on MLB.com, or the AFL live-streams page if the stream isn't up yet; for Mexican, Dominican and Australian winter league teams it opens the game's MLB.TV stream once it starts; Venezuelan, Puerto Rican and Caribbean Series games have no stream link, so that option is greyed out for those teams)
-   - **Baseball+ (ABL's own stream):** Australian Baseball League teams only. Opens the game's page on Baseball+, the league's streaming site, once it starts (some games are free, the rest need an ABL or team pass)
+   - **Baseball+ (subscription):** Australian Baseball League teams only. Opens the game's page on Baseball+, the league's streaming site, once it starts (some games are free, the rest need an ABL or team pass)
    - **Custom Link:** opens any URL you enter, such as your regional sports network's live-game page
 
 That's it. The key will load your team's game within a few seconds and refresh every 30 seconds from there.
